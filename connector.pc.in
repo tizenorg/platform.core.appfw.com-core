@@ -1,0 +1,11 @@
+prefix=@PREFIX@
+exec_prefix=@EXEC_PREFIX@
+libdir=@LIBDIR@
+includedir=@INCLUDEDIR@
+
+Name: connector
+Description: Light-weight IPC supporting library
+Version: @VERSION@
+Libs: -L${libdir} -lconnector
+Cflags: -I${includedir}
+cppflags: -I${includedir}

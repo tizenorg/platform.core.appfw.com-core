@@ -1,0 +1,25 @@
+Source: connector
+Section: libs
+Priority: optional
+Maintainer: Sung-jae Park <nicesj.park@samsung.com>, Young-joo Park <yjoo93.park@samsung.com>
+Build-Depends: debhelper (>= 5), dlog-dev
+Standards-Version: 0.1.0
+
+Package: libconnector
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Light-weight IPC helper library (shared object)
+
+Package: libconnector-dev
+Section: libs
+Architecture: any
+Depends: libconnector (= ${Source-Version})
+Description: Light-weight IPC helper library (development)
+
+Package: libconnector-dbg
+Section: debug
+Architecture: any
+Depends: ${misc:Depends}, libconnector (= ${Source-Version})
+Description: Light-weight IPC helper library (unstripped)
+
