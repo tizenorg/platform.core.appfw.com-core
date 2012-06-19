@@ -12,7 +12,7 @@
 
 #include <dlog.h>
 
-#include "secom_socket.h"
+#include "secure_socket.h"
 #include "debug.h"
 #include "util.h"
 
@@ -46,7 +46,7 @@ static inline int create_socket(const char *peer, struct sockaddr_un *addr)
 	return handle;
 }
 
-EAPI int secom_create_client(const char *peer)
+EAPI int secure_socket_create_client(const char *peer)
 {
 	struct sockaddr_un addr;
 	int handle;
@@ -73,7 +73,7 @@ EAPI int secom_create_client(const char *peer)
 	return handle;
 }
 
-EAPI int secom_create_server(const char *peer)
+EAPI int secure_socket_create_server(const char *peer)
 {
 	int handle;
 	int state;
@@ -109,7 +109,7 @@ EAPI int secom_create_server(const char *peer)
 	return handle;
 }
 
-EAPI int secom_get_connection_handle(int server_handle)
+EAPI int secure_socket_get_connection_handle(int server_handle)
 {
 	struct sockaddr_un addr;
 	int handle;
@@ -128,7 +128,7 @@ EAPI int secom_get_connection_handle(int server_handle)
 	return handle;
 }
 
-EAPI int secom_put_connection_handle(int conn_handle)
+EAPI int secure_socket_remove_connection_handle(int conn_handle)
 {
 	if (close(conn_handle) < 0) {
 		ErrPrint("Close a handle: %s\n", strerror(errno));
@@ -138,7 +138,7 @@ EAPI int secom_put_connection_handle(int conn_handle)
 	return 0;
 }
 
-EAPI int secom_send(int handle, const char *buffer, int size)
+EAPI int secure_socket_send(int handle, const char *buffer, int size)
 {
 	struct msghdr msg;
 	struct iovec iov;
@@ -159,7 +159,7 @@ EAPI int secom_send(int handle, const char *buffer, int size)
 	return iov.iov_len;
 }
 
-EAPI int secom_recv(int handle, char *buffer, int size, int *sender_pid)
+EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 {
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
@@ -197,7 +197,7 @@ EAPI int secom_recv(int handle, char *buffer, int size, int *sender_pid)
 	return iov.iov_len;
 }
 
-EAPI int secom_destroy(int handle)
+EAPI int secure_socket_destroy(int handle)
 {
 	if (close(handle) < 0) {
 		ErrPrint("Failed to close a handle\n");

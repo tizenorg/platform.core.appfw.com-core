@@ -10,7 +10,7 @@
 #include "debug.h"
 #include "connector.h"
 #include "packet.h"
-#include "secom_socket.h"
+#include "secure_socket.h"
 #include "dlist.h"
 #include "connector_packet.h"
 #include "util.h"
@@ -161,7 +161,7 @@ static inline void packet_ready(int handle, const struct recv_ctx *receive, stru
 			result = table[i].handler(receive->pid, handle, receive->packet);
 			if (result) {
 				int ret;
-				ret = secom_send(handle, (void *)packet_data(result), packet_size(result));
+				ret = secure_socket_send(handle, (void *)packet_data(result), packet_size(result));
 				if (ret < 0)
 					ErrPrint("Failed to send an ack packet\n");
 				packet_destroy(result);
@@ -250,7 +250,7 @@ static int service_cb(int handle, int readsize, void *data)
 				return -ENOMEM;
 			}
 
-			ret = secom_recv(handle, ptr, size, &pid);
+			ret = secure_socket_recv(handle, ptr, size, &pid);
 			if (ret < 0 || (receive->pid != -1 && receive->pid != pid)) {
 				ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
 				free(ptr);
@@ -294,7 +294,7 @@ static int service_cb(int handle, int readsize, void *data)
 				return -ENOMEM;
 			}
 
-			ret = secom_recv(handle, ptr, size, &pid);
+			ret = secure_socket_recv(handle, ptr, size, &pid);
 			if (ret < 0 || receive->pid != pid) {
 				ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
 				free(ptr);
@@ -349,7 +349,7 @@ EAPI int connector_packet_async_send(int handle, struct packet *packet, int (*re
 	ctx->data = data;
 	ctx->packet = packet_ref(packet);
 
-	ret = secom_send(handle, (void *)packet_data(packet), packet_size(packet));
+	ret = secure_socket_send(handle, (void *)packet_data(packet), packet_size(packet));
 	if (ret != packet_size(packet)) {
 		ErrPrint("Send failed. %d <> %d (handle: %d)\n", ret, packet_size(packet), handle);
 		destroy_request_ctx(ctx);
@@ -363,7 +363,7 @@ EAPI int connector_packet_send_only(int handle, struct packet *packet)
 {
 	int ret;
 
-	ret = secom_send(handle, (void *)packet_data(packet), packet_size(packet));
+	ret = secure_socket_send(handle, (void *)packet_data(packet), packet_size(packet));
 	if (ret != packet_size(packet))
 		return -EIO;
 
@@ -379,30 +379,30 @@ EAPI struct packet *connector_packet_oneshot_send(const char *addr, struct packe
 	struct packet *result = NULL;
 	void *ptr;
 
-	fd = secom_create_client(addr);
+	fd = secure_socket_create_client(addr);
 	if (fd < 0)
 		return NULL;
 
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("fcntl: %s\n", strerror(errno));
 
-	ret = secom_send(fd, (void *)packet_data(packet), packet_size(packet));
+	ret = secure_socket_send(fd, (void *)packet_data(packet), packet_size(packet));
 	if (ret != packet_size(packet)) {
-		secom_destroy(fd);
+		secure_socket_destroy(fd);
 		return NULL;
 	}
 
 	offset = 0;
 	ptr = malloc(packet_header_size());
 	if (!ptr) {
-		secom_destroy(fd);
+		secure_socket_destroy(fd);
 		return NULL;
 	}
 
-	ret = secom_recv(fd, ptr, packet_header_size(), &pid);
+	ret = secure_socket_recv(fd, ptr, packet_header_size(), &pid);
 	if (ret < 0) {
 		free(ptr);
-		secom_destroy(fd);
+		secure_socket_destroy(fd);
 		return NULL;
 	}
 	result = packet_build(result, offset, ptr, ret);
@@ -411,20 +411,20 @@ EAPI struct packet *connector_packet_oneshot_send(const char *addr, struct packe
 
 	ptr = malloc(packet_payload_size(result));
 	if (!ptr) {
-		secom_destroy(fd);
+		secure_socket_destroy(fd);
 		return NULL;
 	}
 
-	ret = secom_recv(fd, ptr, packet_payload_size(result), &pid);
+	ret = secure_socket_recv(fd, ptr, packet_payload_size(result), &pid);
 	if (ret < 0) {
 		free(ptr);
-		secom_destroy(fd);
+		secure_socket_destroy(fd);
 		return NULL;
 	}
 	result = packet_build(result, offset, ptr, ret);
 	offset += ret;
 	free(ptr);
-	secom_destroy(fd);
+	secure_socket_destroy(fd);
 	return result;
 }
 

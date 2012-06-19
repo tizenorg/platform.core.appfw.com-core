@@ -42,5 +42,5 @@ rm -rf %{buildroot}
 /usr/include/connector/connector.h
 /usr/include/connector/packet.h
 /usr/include/connector/connector_packet.h
-/usr/include/connector/secom_socket.h
+/usr/include/connector/secure_socket.h
 /usr/lib/pkgconfig/*.pc

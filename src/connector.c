@@ -11,7 +11,7 @@
 #include <dlog.h>
 
 #include "dlist.h"
-#include "secom_socket.h"
+#include "secure_socket.h"
 #include "packet.h"
 #include "debug.h"
 #include "connector.h"
@@ -75,14 +75,14 @@ static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	if (!(cond & G_IO_IN)) {
 		DbgPrint("Client is disconencted\n");
 		invoke_disconn_cb_list(client_fd);
-		secom_put_connection_handle(client_fd);
+		secure_socket_remove_connection_handle(client_fd);
 		return FALSE;
 	}
 
 	if (ioctl(client_fd, FIONREAD, &readsize) < 0 || readsize == 0) {
 		DbgPrint("Client is disconencted (readsize: %d)\n", readsize);
 		invoke_disconn_cb_list(client_fd);
-		secom_put_connection_handle(client_fd);
+		secure_socket_remove_connection_handle(client_fd);
 		return FALSE;
 	}
 
@@ -90,7 +90,7 @@ static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	if (ret < 0) {
 		DbgPrint("service callback returns < 0\n");
 		invoke_disconn_cb_list(client_fd);
-		secom_put_connection_handle(client_fd);
+		secure_socket_remove_connection_handle(client_fd);
 		return FALSE;
 	}
 
@@ -111,7 +111,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		return FALSE;
 	}
 
-	client_fd = secom_get_connection_handle(socket_fd);
+	client_fd = secure_socket_get_connection_handle(socket_fd);
 	if (client_fd < 0) {
 		free(data);
 		return FALSE;
@@ -126,7 +126,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	gio = g_io_channel_unix_new(client_fd);
 	if (!gio) {
 		ErrPrint("Failed to get gio\n");
-		secom_put_connection_handle(client_fd);
+		secure_socket_remove_connection_handle(client_fd);
 		free(data);
 		return FALSE;
 	}
@@ -136,7 +136,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		GError *err = NULL;
 		g_io_channel_unref(gio);
 		g_io_channel_shutdown(gio, TRUE, &err);
-		secom_put_connection_handle(client_fd);
+		secure_socket_remove_connection_handle(client_fd);
 		free(data);
 		return FALSE;
 	}
@@ -164,7 +164,7 @@ EAPI int connector_server_create(const char *addr, int is_sync, int (*service_cb
 	cbdata->service_cb = service_cb;
 	cbdata->data = data;
 
-	fd = secom_create_server(addr);
+	fd = secure_socket_create_server(addr);
 	if (fd < 0) {
 		free(cbdata);
 		return fd;
@@ -215,7 +215,7 @@ EAPI int connector_client_create(const char *addr, int is_sync, int (*service_cb
 	cbdata->service_cb = service_cb;
 	cbdata->data = data;
 
-	client_fd = secom_create_client(addr);
+	client_fd = secure_socket_create_client(addr);
 	if (client_fd < 0) {
 		free(cbdata);
 		return client_fd;

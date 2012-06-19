@@ -1,5 +1,5 @@
 @PREFIX@/include/@PROJECT_NAME@/connector.h
 @PREFIX@/include/@PROJECT_NAME@/packet.h
 @PREFIX@/include/@PROJECT_NAME@/connector_packet.h
-@PREFIX@/include/@PROJECT_NAME@/secom_socket.h
+@PREFIX@/include/@PROJECT_NAME@/secure_socket.h
 @PREFIX@/lib/pkgconfig/*.pc
