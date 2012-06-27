@@ -1,4 +1,4 @@
-Name: libconnector
+Name: libcom-core
 Summary: Library for the light-weight IPC 
 Version: 0.0.1
 Release: 1
@@ -39,8 +39,8 @@ rm -rf %{buildroot}
 
 %files devel
 %defattr(-,root,root,-)
-/usr/include/connector/connector.h
-/usr/include/connector/packet.h
-/usr/include/connector/connector_packet.h
-/usr/include/connector/secure_socket.h
+/usr/include/com-core/com-core.h
+/usr/include/com-core/packet.h
+/usr/include/com-core/com-core_packet.h
+/usr/include/com-core/secure_socket.h
 /usr/lib/pkgconfig/*.pc

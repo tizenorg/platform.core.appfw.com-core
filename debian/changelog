@@ -1,9 +1,9 @@
-connector (0.0.1) unstable; urgency=low
+com-core (0.0.1) unstable; urgency=low
 
   * Initial Release.
 
-  * Git: slp/pkgs/c/connector
-  * Tag: connector_0.0.1
+  * Git: slp/pkgs/c/com-core
+  * Tag: com-core_0.0.1
 
  -- Sung-jae Park <nicesj.park@samsung.com>  Mon, 27 Feb 2012 14:14:00 +0900
 

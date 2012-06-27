@@ -8,11 +8,11 @@
 #include <dlog.h>
 
 #include "debug.h"
-#include "connector.h"
+#include "com-core.h"
 #include "packet.h"
 #include "secure_socket.h"
 #include "dlist.h"
-#include "connector_packet.h"
+#include "com-core_packet.h"
 #include "util.h"
 
 static struct info {
@@ -336,7 +336,7 @@ static int service_cb(int handle, int readsize, void *data)
 	return 0;
 }
 
-EAPI int connector_packet_async_send(int handle, struct packet *packet, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data)
+EAPI int com_core_packet_async_send(int handle, struct packet *packet, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data)
 {
 	int ret;
 	struct request_ctx *ctx;
@@ -359,7 +359,7 @@ EAPI int connector_packet_async_send(int handle, struct packet *packet, int (*re
 	return 0;
 }
 
-EAPI int connector_packet_send_only(int handle, struct packet *packet)
+EAPI int com_core_packet_send_only(int handle, struct packet *packet)
 {
 	int ret;
 
@@ -370,7 +370,7 @@ EAPI int connector_packet_send_only(int handle, struct packet *packet)
 	return 0;
 }
 
-EAPI struct packet *connector_packet_oneshot_send(const char *addr, struct packet *packet)
+EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet *packet)
 {
 	int ret;
 	int fd;
@@ -428,58 +428,58 @@ EAPI struct packet *connector_packet_oneshot_send(const char *addr, struct packe
 	return result;
 }
 
-static inline int connector_packet_init(void)
+static inline int com_core_packet_init(void)
 {
-	return connector_add_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
+	return com_core_add_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
 }
 
-static inline int connector_packet_fini(void)
+static inline int com_core_packet_fini(void)
 {
-	connector_del_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
+	com_core_del_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
 	return 0;
 }
 
-EAPI int connector_packet_client_init(const char *addr, int is_sync, struct method *table)
+EAPI int com_core_packet_client_init(const char *addr, int is_sync, struct method *table)
 {
 	int ret;
 
-	ret = connector_packet_init();
+	ret = com_core_packet_init();
 	if (ret < 0)
 		return ret;
 
-	ret = connector_client_create(addr, 0, service_cb, table);
+	ret = com_core_client_create(addr, 0, service_cb, table);
 	if (ret < 0)
-		connector_packet_fini();
+		com_core_packet_fini();
 
 	return ret;
 }
 
-EAPI int connector_packet_client_fini(int handle)
+EAPI int com_core_packet_client_fini(int handle)
 {
-	connector_client_destroy(handle);
-	connector_packet_fini();
+	com_core_client_destroy(handle);
+	com_core_packet_fini();
 	return 0;
 }
 
-EAPI int connector_packet_server_init(const char *addr, struct method *table)
+EAPI int com_core_packet_server_init(const char *addr, struct method *table)
 {
 	int ret;
 
-	ret = connector_packet_init();
+	ret = com_core_packet_init();
 	if (ret < 0)
 		return ret;
 
-	ret = connector_server_create(addr, 0, service_cb, table);
+	ret = com_core_server_create(addr, 0, service_cb, table);
 	if (ret < 0)
-		connector_packet_fini();
+		com_core_packet_fini();
 
 	return ret;
 }
 
-EAPI int connector_packet_server_fini(int handle)
+EAPI int com_core_packet_server_fini(int handle)
 {
-	connector_server_destroy(handle);
-	connector_packet_fini();
+	com_core_server_destroy(handle);
+	com_core_packet_fini();
 	return 0;
 }
 

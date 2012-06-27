@@ -13,7 +13,7 @@ CFLAGS += -Wall -Werror -Winline
 LDFLAGS +=
 PREFIX ?= /usr
 DATADIR ?= /opt
-PROJECT_NAME ?= connector
+PROJECT_NAME ?= com-core
 
 BUILDDIR ?= $(CURDIR)/cmake-tmp
 
@@ -101,7 +101,7 @@ binary-arch: build install
 #	dh_installinfo
 	dh_installman
 	dh_link
-	dh_strip --dbg-package=libconnector-dbg
+	dh_strip --dbg-package=libcom-core-dbg
 	dh_compress
 	dh_fixperms
 #	dh_perl

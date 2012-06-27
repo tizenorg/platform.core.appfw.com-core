@@ -14,7 +14,7 @@
 #include "secure_socket.h"
 #include "packet.h"
 #include "debug.h"
-#include "connector.h"
+#include "com-core.h"
 #include "util.h"
 
 static struct {
@@ -148,7 +148,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	return TRUE;
 }
 
-EAPI int connector_server_create(const char *addr, int is_sync, int (*service_cb)(int fd, int readsize, void *data), void *data)
+EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)(int fd, int readsize, void *data), void *data)
 {
 	GIOChannel *gio;
 	guint id;
@@ -199,7 +199,7 @@ EAPI int connector_server_create(const char *addr, int is_sync, int (*service_cb
 	return fd;
 }
 
-EAPI int connector_client_create(const char *addr, int is_sync, int (*service_cb)(int fd, int readsize, void *data), void *data)
+EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)(int fd, int readsize, void *data), void *data)
 {
 	GIOChannel *gio;
 	guint id;
@@ -251,7 +251,7 @@ EAPI int connector_client_create(const char *addr, int is_sync, int (*service_cb
 	return client_fd;
 }
 
-EAPI int connector_add_event_callback(enum connector_event_type type, int (*evt_cb)(int handle, void *data), void *data)
+EAPI int com_core_add_event_callback(enum com_core_event_type type, int (*evt_cb)(int handle, void *data), void *data)
 {
 	struct evtdata *cbdata;
 	cbdata = malloc(sizeof(*cbdata));
@@ -270,7 +270,7 @@ EAPI int connector_add_event_callback(enum connector_event_type type, int (*evt_
 	return 0;
 }
 
-EAPI void *connector_del_event_callback(enum connector_event_type type, int (*cb)(int handle, void *data), void *data)
+EAPI void *com_core_del_event_callback(enum com_core_event_type type, int (*cb)(int handle, void *data), void *data)
 {
 	struct dlist *l;
 	struct dlist *n;
@@ -301,13 +301,13 @@ EAPI void *connector_del_event_callback(enum connector_event_type type, int (*cb
 	return NULL;
 }
 
-EAPI int connector_server_destroy(int handle)
+EAPI int com_core_server_destroy(int handle)
 {
 	close(handle);
 	return 0;
 }
 
-EAPI int connector_client_destroy(int handle)
+EAPI int com_core_client_destroy(int handle)
 {
 	close(handle);
 	return 0;

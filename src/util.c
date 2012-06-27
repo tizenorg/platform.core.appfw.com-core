@@ -16,7 +16,7 @@ const char *util_basename(const char *name)
 
 	while (--length > 0 && name[length] != '/');
 
-	return length <= 0 ? name : name + length;
+	return length <= 0 ? name : name + length + (name[length] == '/');
 }
 
 /* End of a file */

@@ -1,25 +1,25 @@
-Source: connector
+Source: com-core
 Section: libs
 Priority: optional
 Maintainer: Sung-jae Park <nicesj.park@samsung.com>, Young-joo Park <yjoo93.park@samsung.com>
 Build-Depends: debhelper (>= 5), dlog-dev
 Standards-Version: 0.1.0
 
-Package: libconnector
+Package: libcom-core
 Section: libs
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Light-weight IPC helper library (shared object)
 
-Package: libconnector-dev
+Package: libcom-core-dev
 Section: libs
 Architecture: any
-Depends: libconnector (= ${Source-Version})
+Depends: libcom-core (= ${Source-Version})
 Description: Light-weight IPC helper library (development)
 
-Package: libconnector-dbg
+Package: libcom-core-dbg
 Section: debug
 Architecture: any
-Depends: ${misc:Depends}, libconnector (= ${Source-Version})
+Depends: ${misc:Depends}, libcom-core (= ${Source-Version})
 Description: Light-weight IPC helper library (unstripped)
 
