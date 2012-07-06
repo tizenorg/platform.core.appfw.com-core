@@ -223,6 +223,8 @@ static int service_cb(int handle, int readsize, void *data)
 	int size;
 	char *ptr;
 
+	DbgPrint("Receive: %d\n", readsize);
+
 	receive = find_recv_ctx(handle);
 	if (!receive)
 		receive = create_recv_ctx(handle);

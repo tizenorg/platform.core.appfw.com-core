@@ -15,7 +15,7 @@ enum packet_type {
 
 extern struct packet *packet_create(const char *command, const char *fmt, ...);
 extern struct packet *packet_create_noack(const char *command, const char *fmt, ...);
-extern struct packet *packet_create_reply(struct packet *packet, const char *fmt, ...);
+extern struct packet *packet_create_reply(const struct packet *packet, const char *fmt, ...);
 extern int packet_get(const struct packet *packet, const char *fmt, ...);
 extern int packet_destroy(struct packet *packet);
 extern struct packet *packet_ref(struct packet *packet);

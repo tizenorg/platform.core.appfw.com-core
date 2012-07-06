@@ -4,7 +4,7 @@ extern "C" {
 
 struct method {
 	const char *cmd;
-	struct packet *(*handler)(pid_t pid, int handle, struct packet *packet);
+	struct packet *(*handler)(pid_t pid, int handle, const struct packet *packet);
 };
 
 extern int com_core_packet_async_send(int handle, struct packet *packet, int (*recv_cb)(pid_t, int handle, const struct packet *packet, void *data), void *data);

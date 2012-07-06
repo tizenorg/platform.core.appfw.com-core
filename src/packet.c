@@ -157,7 +157,7 @@ out:
 	return packet;
 }
 
-EAPI struct packet *packet_create_reply(struct packet *packet, const char *fmt, ...)
+EAPI struct packet *packet_create_reply(const struct packet *packet, const char *fmt, ...)
 {
 	int payload_size;
 	struct packet *result;
