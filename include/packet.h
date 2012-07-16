@@ -8,6 +8,7 @@ enum packet_type {
 	PACKET_REQ,
 	PACKET_ACK,
 	PACKET_REQ_NOACK,
+	PACKET_ERROR,
 };
 
 #define PACKET_VERSION	1

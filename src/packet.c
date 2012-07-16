@@ -31,17 +31,27 @@ struct data {
 };
 
 struct packet {
+	enum {
+		VALID = 0xbeefbeef,
+		INVALID = 0xdeaddead,
+	} state;
 	int refcnt;
 	struct data *data;
 };
 
 EAPI const enum packet_type const packet_type(const struct packet *packet)
 {
+	if (!packet || packet->state != VALID)
+		return PACKET_ERROR;
+
 	return packet->data->head.type;
 }
 
 EAPI const int const packet_version(const struct packet *packet)
 {
+	if (!packet || packet->state != VALID)
+		return PACKET_ERROR;
+
 	return packet->data->head.version;
 }
 
@@ -54,26 +64,41 @@ EAPI const int const packet_header_size(void)
 
 EAPI const int const packet_size(const struct packet *packet)
 {
+	if (!packet || packet->state != VALID)
+		return -EINVAL;
+
 	return sizeof(*packet->data) + packet->data->head.payload_size;
 }
 
 EAPI const unsigned long const packet_seq(const struct packet *packet)
 {
+	if (!packet || packet->state != VALID)
+		return 0;
+
 	return packet->data->head.seq;
 }
 
 EAPI const int const packet_payload_size(const struct packet *packet)
 {
+	if (!packet || packet->state != VALID)
+		return -EINVAL;
+
 	return packet->data->head.payload_size;
 }
 
 EAPI const char * const packet_command(const struct packet *packet)
 {
+	if (!packet || packet->state != VALID)
+		return NULL;
+
 	return packet->data->head.command;
 }
 
 EAPI const void * const packet_data(const struct packet *packet)
 {
+	if (!packet || packet->state != VALID)
+		return NULL;
+
 	return packet->data;
 }
 
@@ -109,6 +134,7 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 			packet->data->head.payload_size += sizeof(int);
 			packet->data = check_and_expand_packet(packet->data, &payload_size);
 			if (!packet->data) {
+				packet->state = INVALID;
 				free(packet);
 				packet = NULL;
 				goto out;
@@ -123,6 +149,7 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 			packet->data->head.payload_size += strlen(str) + 1; /*!< Including NIL */
 			packet->data = check_and_expand_packet(packet->data, &payload_size);
 			if (!packet->data) {
+				packet->state = INVALID;
 				free(packet);
 				packet = NULL;
 				goto out;
@@ -135,6 +162,7 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 			packet->data->head.payload_size += sizeof(double);
 			packet->data = check_and_expand_packet(packet->data, &payload_size);
 			if (!packet->data) {
+				packet->state = INVALID;
 				free(packet);
 				packet = NULL;
 				goto out;
@@ -144,6 +172,7 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 			break;
 		default:
 			ErrPrint("Invalid type [%c]\n", *ptr);
+			packet->state = INVALID;
 			free(packet->data);
 			free(packet);
 			packet = NULL;
@@ -163,6 +192,9 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	struct packet *result;
 	va_list va;
 
+	if (!packet || packet->state != VALID)
+		return NULL;
+
 	result = malloc(sizeof(*result));
 	if (!result) {
 		ErrPrint("Heap: %s\n", strerror(errno));
@@ -174,9 +206,12 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	result->data = malloc(payload_size);
 	if (!packet->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
+		result->state = INVALID;
+		free(result);
 		return NULL;
 	}
 
+	result->state = VALID;
 	result->data->head.seq = packet->data->head.seq;
 	result->data->head.type = PACKET_ACK;
 	result->data->head.version = packet->data->head.version;
@@ -213,10 +248,12 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 	packet->data = malloc(payload_size);
 	if (!packet->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
+		packet->state = INVALID;
 		free(packet);
 		return NULL;
 	}
 
+	packet->state = VALID;
 	packet->data->head.seq = s_info.seq++;
 	packet->data->head.type = PACKET_REQ;
 	packet->data->head.version = PACKET_VERSION;
@@ -253,10 +290,12 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 	result->data = malloc(payload_size);
 	if (!result->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
+		result->state = INVALID;
 		free(result);
 		return NULL;
 	}
 
+	result->state = VALID;
 	result->data->head.seq = s_info.seq++;
 	result->data->head.type = PACKET_REQ_NOACK;
 	result->data->head.version = PACKET_VERSION;
@@ -281,6 +320,9 @@ EAPI int packet_get(const struct packet *packet, const char *fmt, ...)
 	int *int_ptr;
 	double *double_ptr;
 	char **str_ptr;
+
+	if (!packet || packet->state != VALID)
+		return -EINVAL;
 
 	va_start(va, fmt);
 
@@ -323,7 +365,7 @@ out:
 
 EAPI struct packet *packet_ref(struct packet *packet)
 {
-	if (!packet)
+	if (!packet || packet->state != VALID)
 		return NULL;
 
 	packet->refcnt++;
@@ -332,7 +374,7 @@ EAPI struct packet *packet_ref(struct packet *packet)
 
 EAPI struct packet *packet_unref(struct packet *packet)
 {
-	if (!packet)
+	if (!packet || packet->state != VALID)
 		return NULL;
 
 	packet->refcnt--;
@@ -342,6 +384,7 @@ EAPI struct packet *packet_unref(struct packet *packet)
 	}
 
 	if (packet->refcnt == 0) {
+		packet->state = INVALID;
 		free(packet->data);
 		free(packet);
 		return NULL;
@@ -376,10 +419,12 @@ EAPI struct packet *packet_build(struct packet *packet, int offset, void *data, 
 		packet->data = malloc(size);
 		if (!packet->data) {
 			ErrPrint("Heap: %s\n", strerror(errno));
+			packet->state = INVALID;
 			free(packet);
 			return NULL;
 		}
 
+		packet->state = VALID;
 		memcpy(packet->data, data, size);
 		return packet;
 	}
@@ -387,6 +432,7 @@ EAPI struct packet *packet_build(struct packet *packet, int offset, void *data, 
 	ptr = realloc(packet->data, offset + size);
 	if (!ptr) {
 		ErrPrint("Heap: %s\n", strerror(errno));
+		packet->state = INVALID;
 		free(packet->data);
 		free(packet);
 		return NULL;
