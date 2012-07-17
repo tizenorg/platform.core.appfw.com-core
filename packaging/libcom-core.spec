@@ -1,6 +1,6 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.0.1
+Version: 0.0.2
 Release: 1
 Group: main/util
 License: Samsung Proprietary License
