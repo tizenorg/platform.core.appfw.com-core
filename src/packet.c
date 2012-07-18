@@ -41,7 +41,7 @@ struct packet {
 
 EAPI const enum packet_type const packet_type(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID || !packet->data)
 		return PACKET_ERROR;
 
 	return packet->data->head.type;
@@ -49,7 +49,7 @@ EAPI const enum packet_type const packet_type(const struct packet *packet)
 
 EAPI const int const packet_version(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID || !packet->data)
 		return PACKET_ERROR;
 
 	return packet->data->head.version;
@@ -57,14 +57,14 @@ EAPI const int const packet_version(const struct packet *packet)
 
 EAPI const int const packet_header_size(void)
 {
-	struct data packet; /* Only for getting the size of header of packet */
+	struct data payload; /* Only for getting the size of header of packet */
 
-	return sizeof(packet.head);
+	return sizeof(payload.head);
 }
 
 EAPI const int const packet_size(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID || !packet->data)
 		return -EINVAL;
 
 	return sizeof(*packet->data) + packet->data->head.payload_size;
@@ -72,7 +72,7 @@ EAPI const int const packet_size(const struct packet *packet)
 
 EAPI const unsigned long const packet_seq(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID || !packet->data)
 		return 0;
 
 	return packet->data->head.seq;
@@ -80,7 +80,7 @@ EAPI const unsigned long const packet_seq(const struct packet *packet)
 
 EAPI const int const packet_payload_size(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID || !packet->data)
 		return -EINVAL;
 
 	return packet->data->head.payload_size;
@@ -88,7 +88,7 @@ EAPI const int const packet_payload_size(const struct packet *packet)
 
 EAPI const char * const packet_command(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID || !packet->data)
 		return NULL;
 
 	return packet->data->head.command;
@@ -201,7 +201,7 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 		return NULL;
 	}
 
-	payload_size = sizeof(*result) + BUFSIZ;
+	payload_size = sizeof(*result->data) + BUFSIZ;
 	result->refcnt = 0;
 	result->data = malloc(payload_size);
 	if (!packet->data) {
@@ -215,7 +215,7 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	result->data->head.seq = packet->data->head.seq;
 	result->data->head.type = PACKET_ACK;
 	result->data->head.version = packet->data->head.version;
-	strcpy(result->data->head.command, packet->data->head.command);
+	strcpy(result->data->head.command, packet->data->head.command); /* we don't need to use strncmp */
 	result->data->head.payload_size = 0;
 	payload_size -= sizeof(*result->data);
 
@@ -243,7 +243,7 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 		return NULL;
 	}
 
-	payload_size = sizeof(*packet) + BUFSIZ;
+	payload_size = sizeof(*packet->data) + BUFSIZ;
 	packet->refcnt = 0;
 	packet->data = malloc(payload_size);
 	if (!packet->data) {
@@ -257,7 +257,7 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 	packet->data->head.seq = s_info.seq++;
 	packet->data->head.type = PACKET_REQ;
 	packet->data->head.version = PACKET_VERSION;
-	strcpy(packet->data->head.command, cmd);
+	strncpy(packet->data->head.command, cmd, sizeof(packet->data->head.command));
 	packet->data->head.payload_size = 0;
 	payload_size -= sizeof(*packet->data); /*!< Usable payload size (except head size) */
 
@@ -285,7 +285,7 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 		return NULL;
 	}
 
-	payload_size = sizeof(*result) + BUFSIZ;
+	payload_size = sizeof(*result->data) + BUFSIZ;
 	result->refcnt = 0;
 	result->data = malloc(payload_size);
 	if (!result->data) {
