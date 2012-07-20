@@ -1,3 +1,10 @@
+com-core (0.0.4) unstable; urgency=low
+
+  * Git: slp/pkgs/c/com-core
+  * Tag: com-core_0.0.4
+
+ -- Sung-jae Park <nicesj.park@samsung.com>  Fri, 20 Jul 2012 10:07:33 +0900
+
 com-core (0.0.3) unstable; urgency=low
 
   * Git: slp/pkgs/c/com-core

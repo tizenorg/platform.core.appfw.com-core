@@ -1,6 +1,6 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.0.3
+Version: 0.0.4
 Release: 1
 Group: main/util
 License: Samsung Proprietary License
@@ -22,9 +22,9 @@ Light-weight IPC supporting library (dev)
 
 %prep
 %setup -q
-cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix}
 
 %build
+cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix}
 make %{?jobs:-j%jobs}
 
 %install
