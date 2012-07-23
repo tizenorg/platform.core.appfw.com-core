@@ -7,7 +7,7 @@ struct method {
 	struct packet *(*handler)(pid_t pid, int handle, const struct packet *packet);
 };
 
-extern int com_core_packet_async_send(int handle, struct packet *packet, int (*recv_cb)(pid_t, int handle, const struct packet *packet, void *data), void *data);
+extern int com_core_packet_async_send(int handle, struct packet *packet, unsigned int timeout, int (*recv_cb)(pid_t, int handle, const struct packet *packet, void *data), void *data);
 extern int com_core_packet_send_only(int handle, struct packet *packet);
 extern struct packet *com_core_packet_oneshot_send(const char *addr, struct packet *packet);
 

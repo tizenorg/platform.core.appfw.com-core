@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 
+#include <glib.h>
 #include <dlog.h>
 
 #include "debug.h"
@@ -32,6 +33,8 @@ struct request_ctx {
 	struct packet *packet;
 	int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data);
 	void *data;
+
+	guint timeout;
 };
 
 struct recv_ctx {
@@ -63,6 +66,9 @@ static inline struct request_ctx *find_request_ctx(int handle, unsigned long seq
 
 static inline void destroy_request_ctx(struct request_ctx *ctx)
 {
+	if (ctx->timeout > 0)
+		g_source_remove(ctx->timeout);
+
 	packet_unref(ctx->packet);
 	dlist_remove_data(s_info.request_list, ctx);
 	free(ctx);
@@ -336,7 +342,21 @@ static int service_cb(int handle, int readsize, void *data)
 	return 0;
 }
 
-EAPI int com_core_packet_async_send(int handle, struct packet *packet, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data)
+static gboolean timeout_cb(gpointer data)
+{
+	struct request_ctx *ctx = data;
+
+	ErrPrint("Timeout (Not responding in time)\n");
+
+	if (ctx->recv_cb)
+		ctx->recv_cb(ctx->pid, ctx->handle, NULL, ctx->data);
+
+	ctx->timeout = 0u;
+	destroy_request_ctx(ctx);
+	return FALSE;
+}
+
+EAPI int com_core_packet_async_send(int handle, struct packet *packet, unsigned int timeout, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data)
 {
 	int ret;
 	struct request_ctx *ctx;
@@ -348,6 +368,11 @@ EAPI int com_core_packet_async_send(int handle, struct packet *packet, int (*rec
 	ctx->recv_cb = recv_cb;
 	ctx->data = data;
 	ctx->packet = packet_ref(packet);
+	if (timeout > 0) {
+		ctx->timeout = g_timeout_add(timeout, timeout_cb, ctx);
+		if (ctx->timeout == 0)
+			ErrPrint("Failed to add timeout\n");
+	}
 
 	ret = secure_socket_send(handle, (void *)packet_data(packet), packet_size(packet));
 	if (ret != packet_size(packet)) {
