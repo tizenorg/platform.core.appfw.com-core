@@ -134,8 +134,13 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, client_cb, data);
 	if (id < 0) {
 		GError *err = NULL;
+		ErrPrint("Failed to add IO watch\n");
 		g_io_channel_unref(gio);
 		g_io_channel_shutdown(gio, TRUE, &err);
+		if (err) {
+			ErrPrint("Shutdown: %s\n", err->message);
+			g_error_free(err);
+		}
 		secure_socket_remove_connection_handle(client_fd);
 		free(data);
 		return FALSE;
@@ -180,6 +185,7 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 
 	gio = g_io_channel_unix_new(fd);
 	if (!gio) {
+		ErrPrint("Failed to create new io channel\n");
 		free(cbdata);
 		close(fd);
 		return -EIO;
@@ -188,9 +194,14 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 	id = g_io_add_watch(gio, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, (GIOFunc)accept_cb, cbdata);
 	if (id < 0) {
 		GError *err = NULL;
+		ErrPrint("Failed to add IO watch\n");
 		free(cbdata);
 		g_io_channel_unref(gio);
 		g_io_channel_shutdown(gio, TRUE, &err);
+		if (err) {
+			ErrPrint("Shutdown: %s\n", err->message);
+			g_error_free(err);
+		}
 		close(fd);
 		return -EIO;
 	}
@@ -231,6 +242,7 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 
 	gio = g_io_channel_unix_new(client_fd);
 	if (!gio) {
+		ErrPrint("Failed to create a new IO channel\n");
 		free(cbdata);
 		close(client_fd);
 		return -EIO;
@@ -239,9 +251,14 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 	id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)client_cb, cbdata);
 	if (id < 0) {
 		GError *err = NULL;
+		ErrPrint("Failed to add IO watch\n");
 		free(cbdata);
 		g_io_channel_unref(gio);
 		g_io_channel_shutdown(gio, TRUE, &err);
+		if (err) {
+			ErrPrint("Shutdown: %s\n", err->message);
+			g_error_free(err);
+		}
 		close(client_fd);
 		return -EIO;
 	}
