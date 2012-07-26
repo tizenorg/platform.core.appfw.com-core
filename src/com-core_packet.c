@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
 
 #include <glib.h>
 #include <dlog.h>
@@ -407,13 +409,14 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	int offset;
 	struct packet *result = NULL;
 	void *ptr;
-	struct timeval stv;
-	struct timeval etv;
-	struct timeval rtv;
+	struct timeval timeout;
+	fd_set set;
 
 	fd = secure_socket_create_client(addr);
 	if (fd < 0)
 		return NULL;
+
+	DbgPrint("FD: %d\n", fd);
 
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("fcntl: %s\n", strerror(errno));
@@ -421,25 +424,48 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 		ErrPrint("Error: %s\n", strerror(errno));
 
-	gettimeofday(&stv, NULL);
-	sz = 0;
-	do {
-		ret = secure_socket_send(fd, (char *)packet_data(packet) + sz, packet_size(packet) - sz);
-		if (ret < 0) {
-			secure_socket_destroy(fd);
-			return NULL;
-		}
+	ret = secure_socket_send(fd, (char *)packet_data(packet), packet_size(packet));
+	if (ret < 0) {
+		secure_socket_destroy(fd);
+		return NULL;
+	}
+	DbgPrint("Sent: %d bytes (%d bytes)\n", ret, packet_size(packet));
 
-		sz += ret;
+	FD_ZERO(&set);
+	FD_SET(fd, &set);
 
-		gettimeofday(&etv, NULL);
-		timersub(&etv, &stv, &rtv);
-		if (rtv.tv_sec > DEFAULT_TIMEOUT) {
-			ErrPrint("Timeout\n");
-			secure_socket_destroy(fd);
-			return NULL;
-		}
-	} while (sz < packet_size(packet));
+	timeout.tv_sec = DEFAULT_TIMEOUT;
+	timeout.tv_usec = 0;
+
+	ret = select(fd + 1, &set, NULL, NULL, &timeout);
+	if (ret < 0) {
+		ErrPrint("Error: %s\n", strerror(errno));
+		secure_socket_destroy(fd);
+		return NULL;
+	} else if (ret != 1) {
+		ErrPrint("Timeout (%d)\n", ret);
+		secure_socket_destroy(fd);
+		return NULL;
+	}
+
+	if (!FD_ISSET(fd, &set)) {
+		ErrPrint("Invalid handle\n");
+		secure_socket_destroy(fd);
+		return NULL;
+	}
+
+	if (ioctl(fd, FIONREAD, &sz) < 0 || sz == 0) {
+		ErrPrint("Connection closed\n");
+		secure_socket_destroy(fd);
+		return NULL;
+	}
+
+	DbgPrint("Readable size: %d\n", sz);
+	if (sz < packet_header_size()) {
+		ErrPrint("Invalid packet [SIZE: %d]\n", sz);
+		secure_socket_destroy(fd);
+		return NULL;
+	}
 
 	offset = 0;
 	ptr = malloc(packet_header_size());
@@ -449,59 +475,46 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 		return NULL;
 	}
 
-	gettimeofday(&stv, NULL);
-	sz = 0;
-	do {
-		ret = secure_socket_recv(fd, (char *)ptr + sz, packet_header_size() - sz, &pid);
-		if (ret < 0) {
-			free(ptr);
-			secure_socket_destroy(fd);
-			return NULL;
-		}
-		sz += ret;
-		gettimeofday(&etv, NULL);
-		timersub(&etv, &stv, &rtv);
-		if (rtv.tv_sec > DEFAULT_TIMEOUT) {
-			ErrPrint("Timeout\n");
-			free(ptr);
-			secure_socket_destroy(fd);
-			return NULL;
-		}
-	} while (sz < packet_header_size());
+	ret = secure_socket_recv(fd, (char *)ptr, packet_header_size(), &pid);
+	if (ret < 0) {
+		free(ptr);
+		secure_socket_destroy(fd);
+		return NULL;
+	}
+	DbgPrint("Recv'd size: %d (header: %d)\n", ret, packet_header_size());
 	result = packet_build(result, offset, ptr, ret);
 	offset += ret;
 	free(ptr);
+
+	DbgPrint("Payload size: %d\n", packet_payload_size(result));
+	if (sz < packet_payload_size(result) + packet_header_size()) {
+		ErrPrint("Invalid packet [%d <> %d]\n", sz, packet_payload_size(result) + packet_header_size());
+		secure_socket_destroy(fd);
+		packet_destroy(result);
+		return NULL;
+	}
 
 	ptr = malloc(packet_payload_size(result));
 	if (!ptr) {
 		ErrPrint("Heap: %s\n", strerror(errno));
 		secure_socket_destroy(fd);
+		packet_destroy(result);
 		return NULL;
 	}
 
-	gettimeofday(&stv, NULL);
-	sz = 0;
-	do {
-		ret = secure_socket_recv(fd, (char *)ptr + sz, packet_payload_size(result) - sz, &pid);
-		if (ret < 0) {
-			free(ptr);
-			secure_socket_destroy(fd);
-			return NULL;
-		}
-		sz += ret;
-		gettimeofday(&etv, NULL);
-		timersub(&etv, &stv, &rtv);
-		if (rtv.tv_sec > DEFAULT_TIMEOUT) {
-			ErrPrint("Timeout\n");
-			free(ptr);
-			secure_socket_destroy(fd);
-			return NULL;
-		}
-	} while (sz < packet_payload_size(result));
+	ret = secure_socket_recv(fd, (char *)ptr, packet_payload_size(result), &pid);
+	if (ret < 0) {
+		free(ptr);
+		secure_socket_destroy(fd);
+		packet_destroy(result);
+		return NULL;
+	}
 	result = packet_build(result, offset, ptr, ret);
 	offset += ret;
 	free(ptr);
+
 	secure_socket_destroy(fd);
+	DbgPrint("Close connection: %d\n", fd);
 	return result;
 }
 

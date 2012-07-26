@@ -87,7 +87,7 @@ static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	}
 
 	if (ioctl(client_fd, FIONREAD, &readsize) < 0 || readsize == 0) {
-		DbgPrint("Client is disconencted (readsize: %d)\n", readsize);
+		DbgPrint("Client is disconencted (fd: %d, readsize: %d)\n", client_fd, readsize);
 		invoke_disconn_cb_list(client_fd);
 		secure_socket_remove_connection_handle(client_fd);
 		return FALSE;
@@ -104,7 +104,7 @@ static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	return TRUE;
 }
 
-static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
+static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 {
 	int socket_fd;
 	int client_fd;
@@ -116,7 +116,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		ErrPrint("Accept socket closed\n");
 		if (close(socket_fd) < 0)
 			ErrPrint("Close error[%d]: %s\n", socket_fd, strerror(errno));
-		free(data);
+		free(cbdata);
 		return FALSE;
 	}
 
@@ -124,15 +124,17 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		DbgPrint("Client connection is lost\n");
 		if (close(socket_fd) < 0)
 			ErrPrint("Close error[%d]: %s\n", socket_fd, strerror(errno));
-		free(data);
+		free(cbdata);
 		return FALSE;
 	}
 
+	DbgPrint("New connectino arrived: socket(%d)\n", socket_fd);
 	client_fd = secure_socket_get_connection_handle(socket_fd);
 	if (client_fd < 0) {
-		free(data);
+		free(cbdata);
 		return FALSE;
 	}
+	DbgPrint("New client: %d\n", client_fd);
 
 	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("Error: %s\n", strerror(errno));
@@ -144,14 +146,14 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	if (!gio) {
 		ErrPrint("Failed to get gio\n");
 		secure_socket_remove_connection_handle(client_fd);
-		free(data);
+		free(cbdata);
 		return FALSE;
 	}
 
 	g_io_channel_set_close_on_unref(gio, FALSE);
 
-	id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, client_cb, data);
-	if (id < 0) {
+	id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)client_cb, cbdata);
+	if (id <= 0) {
 		GError *err = NULL;
 		ErrPrint("Failed to add IO watch\n");
 		g_io_channel_shutdown(gio, TRUE, &err);
@@ -161,7 +163,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		}
 		g_io_channel_unref(gio);
 		secure_socket_remove_connection_handle(client_fd);
-		free(data);
+		free(cbdata);
 		return FALSE;
 	}
 
@@ -197,11 +199,10 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("fcntl: %s\n", strerror(errno));
 
-	if (!is_sync) {
-		if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
-			ErrPrint("fcntl: %s\n", strerror(errno));
-	}
+	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+		ErrPrint("fcntl: %s\n", strerror(errno));
 
+	DbgPrint("Create new IO channel for socket FD: %d\n", fd);
 	gio = g_io_channel_unix_new(fd);
 	if (!gio) {
 		ErrPrint("Failed to create new io channel\n");
@@ -214,7 +215,7 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 	g_io_channel_set_close_on_unref(gio, FALSE);
 
 	id = g_io_add_watch(gio, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, (GIOFunc)accept_cb, cbdata);
-	if (id < 0) {
+	if (id <= 0) {
 		GError *err = NULL;
 		ErrPrint("Failed to add IO watch\n");
 		free(cbdata);
@@ -258,10 +259,8 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("Error: %s\n", strerror(errno));
 
-	if (!is_sync) {
-		if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0)
-			ErrPrint("Error: %s\n", strerror(errno));
-	}
+	if (!is_sync && fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0)
+		ErrPrint("Error: %s\n", strerror(errno));
 
 	gio = g_io_channel_unix_new(client_fd);
 	if (!gio) {
@@ -275,7 +274,7 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 	g_io_channel_set_close_on_unref(gio, FALSE);
 
 	id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)client_cb, cbdata);
-	if (id < 0) {
+	if (id <= 0) {
 		GError *err = NULL;
 		ErrPrint("Failed to add IO watch\n");
 		free(cbdata);
