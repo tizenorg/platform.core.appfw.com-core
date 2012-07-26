@@ -154,6 +154,11 @@ EAPI int secure_socket_send(int handle, const char *buffer, int size)
 	struct iovec iov;
 	int ret;
 
+	if (!buffer || size <= 0) {
+		ErrPrint("Reject: 0 byte data sending\n");
+		return -1;
+	}
+
 	memset(&msg, 0, sizeof(msg));
 	iov.iov_base = (char *)buffer;
 	iov.iov_len = size;
@@ -180,7 +185,7 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 	struct iovec iov;
 	char control[1024];
 
-	if (!sender_pid)
+	if (!sender_pid || size <= 0 || !buffer)
 		return -1;
 
 	memset(&msg, 0, sizeof(msg));

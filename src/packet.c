@@ -299,7 +299,7 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 	result->data->head.seq = s_info.seq++;
 	result->data->head.type = PACKET_REQ_NOACK;
 	result->data->head.version = PACKET_VERSION;
-	strcpy(result->data->head.command, cmd);
+	strncpy(result->data->head.command, cmd, sizeof(result->data->head.command));
 	result->data->head.payload_size = 0;
 	payload_size -= sizeof(*result->data);
 
@@ -327,7 +327,7 @@ EAPI int packet_get(const struct packet *packet, const char *fmt, ...)
 	va_start(va, fmt);
 
 	ptr = fmt;
-	while (*ptr) {
+	while (*ptr && offset < packet->data->head.payload_size) {
 		payload = packet->data->payload + offset;
 		switch (*ptr) {
 		case 'i':
