@@ -16,6 +16,8 @@
 #include "com-core_packet.h"
 #include "util.h"
 
+#define DEFAULT_TIMEOUT 2
+
 static struct info {
 	struct dlist *recv_list;
 	struct dlist *request_list;
@@ -398,11 +400,15 @@ EAPI int com_core_packet_send_only(int handle, struct packet *packet)
 EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet *packet)
 {
 	int ret;
+	int sz;
 	int fd;
 	pid_t pid;
 	int offset;
 	struct packet *result = NULL;
 	void *ptr;
+	struct timeval stv;
+	struct timeval etv;
+	struct timeval rtv;
 
 	fd = secure_socket_create_client(addr);
 	if (fd < 0)
@@ -411,41 +417,86 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("fcntl: %s\n", strerror(errno));
 
-	ret = secure_socket_send(fd, (void *)packet_data(packet), packet_size(packet));
-	if (ret != packet_size(packet)) {
-		secure_socket_destroy(fd);
-		return NULL;
-	}
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+		ErrPrint("Error: %s\n", strerror(errno));
+
+	gettimeofday(&stv, NULL);
+	sz = 0;
+	do {
+		ret = secure_socket_send(fd, (char *)packet_data(packet) + sz, packet_size(packet) - sz);
+		if (ret < 0) {
+			secure_socket_destroy(fd);
+			return NULL;
+		}
+
+		sz += ret;
+
+		gettimeofday(&etv, NULL);
+		timersub(&etv, &stv, &rtv);
+		if (rtv.tv_sec > DEFAULT_TIMEOUT) {
+			ErrPrint("Timeout\n");
+			secure_socket_destroy(fd);
+			return NULL;
+		}
+	} while (sz < packet_size(packet));
 
 	offset = 0;
 	ptr = malloc(packet_header_size());
 	if (!ptr) {
+		ErrPrint("Heap: %s\n", strerror(errno));
 		secure_socket_destroy(fd);
 		return NULL;
 	}
 
-	ret = secure_socket_recv(fd, ptr, packet_header_size(), &pid);
-	if (ret < 0) {
-		free(ptr);
-		secure_socket_destroy(fd);
-		return NULL;
-	}
+	gettimeofday(&stv, NULL);
+	sz = 0;
+	do {
+		ret = secure_socket_recv(fd, (char *)ptr + sz, packet_header_size() - sz, &pid);
+		if (ret < 0) {
+			free(ptr);
+			secure_socket_destroy(fd);
+			return NULL;
+		}
+		sz += ret;
+		gettimeofday(&etv, NULL);
+		timersub(&etv, &stv, &rtv);
+		if (rtv.tv_sec > DEFAULT_TIMEOUT) {
+			ErrPrint("Timeout\n");
+			free(ptr);
+			secure_socket_destroy(fd);
+			return NULL;
+		}
+	} while (sz < packet_header_size());
 	result = packet_build(result, offset, ptr, ret);
 	offset += ret;
 	free(ptr);
 
 	ptr = malloc(packet_payload_size(result));
 	if (!ptr) {
+		ErrPrint("Heap: %s\n", strerror(errno));
 		secure_socket_destroy(fd);
 		return NULL;
 	}
 
-	ret = secure_socket_recv(fd, ptr, packet_payload_size(result), &pid);
-	if (ret < 0) {
-		free(ptr);
-		secure_socket_destroy(fd);
-		return NULL;
-	}
+	gettimeofday(&stv, NULL);
+	sz = 0;
+	do {
+		ret = secure_socket_recv(fd, (char *)ptr + sz, packet_payload_size(result) - sz, &pid);
+		if (ret < 0) {
+			free(ptr);
+			secure_socket_destroy(fd);
+			return NULL;
+		}
+		sz += ret;
+		gettimeofday(&etv, NULL);
+		timersub(&etv, &stv, &rtv);
+		if (rtv.tv_sec > DEFAULT_TIMEOUT) {
+			ErrPrint("Timeout\n");
+			free(ptr);
+			secure_socket_destroy(fd);
+			return NULL;
+		}
+	} while (sz < packet_payload_size(result));
 	result = packet_build(result, offset, ptr, ret);
 	offset += ret;
 	free(ptr);

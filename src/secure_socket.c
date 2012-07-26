@@ -16,6 +16,8 @@
 #include "debug.h"
 #include "util.h"
 
+#define BACKLOG 50	/*!< Accept only 50 connections as default */
+
 int errno;
 
 static inline int create_socket(const char *peer, struct sockaddr_un *addr)
@@ -67,8 +69,12 @@ EAPI int secure_socket_create_client(const char *peer)
 		return -1;
 	}
 
-	if (setsockopt(handle, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
+	if (setsockopt(handle, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0) {
 		ErrPrint("Failed to change sock opt : %s\n", strerror(errno));
+		if (close(handle) < 0)
+			ErrPrint("close a handle: %s\n", strerror(errno));
+		return -1;
+	}
 
 	return handle;
 }
@@ -92,7 +98,7 @@ EAPI int secure_socket_create_server(const char *peer)
 		return -1;
 	}
 
-	state = listen(handle, 10); /* BACKLOG 10 */
+	state = listen(handle, BACKLOG);
 	if (state < 0) {
 		ErrPrint("Failed to listen a socket %s\n", strerror(errno));
 
@@ -122,8 +128,12 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
 		return -1;
 	}
 
-	if (setsockopt(handle, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
+	if (setsockopt(handle, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0) {
 		ErrPrint("Failed to change sock opt : %s\n", strerror(errno));
+		if (close(handle) < 0)
+			ErrPrint("Close a handle: %s\n", strerror(errno));
+		return -1;
+	}
 
 	return handle;
 }
@@ -152,6 +162,10 @@ EAPI int secure_socket_send(int handle, const char *buffer, int size)
 
 	ret = sendmsg(handle, &msg, 0);
 	if (ret < 0) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			ErrPrint("handle[%d] size[%d] Try again [%s]\n", handle, size, strerror(errno));
+			return 0;
+		}
 		ErrPrint("Failed to send message [%s]\n", strerror(errno));
 		return -1;
 	}
@@ -178,6 +192,11 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 	msg.msg_controllen = sizeof(control);
 
 	if (recvmsg(handle, &msg, 0) < 0) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			ErrPrint("handle[%d] size[%d] Try again [%s]\n", handle, size, strerror(errno));
+			return 0;
+		}
+
 		ErrPrint("Failed to recvmsg [%s]\n", strerror(errno));
 		return -1;
 	}
@@ -200,7 +219,7 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 EAPI int secure_socket_destroy(int handle)
 {
 	if (close(handle) < 0) {
-		ErrPrint("Failed to close a handle\n");
+		ErrPrint("Failed to close a handle: %s\n", strerror(errno));
 		return -1;
 	}
 	return 0;
