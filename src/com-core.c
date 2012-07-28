@@ -4,7 +4,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/ioctl.h>
+#include <sys/time.h>
+#include <sys/types.h>
 
 #include <glib.h>
 
@@ -26,7 +27,7 @@ static struct {
 };
 
 struct cbdata {
-	int (*service_cb)(int fd, int readsize, void *data);
+	int (*service_cb)(int fd, void *data);
 	void *data;
 };
 
@@ -68,36 +69,28 @@ static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	int client_fd;
 	struct cbdata *cbdata = data;
 	int ret;
-	int readsize;
 
 	client_fd = g_io_channel_unix_get_fd(src);
 
 	if (!(cond & G_IO_IN)) {
 		DbgPrint("Client is disconencted\n");
 		invoke_disconn_cb_list(client_fd);
-		secure_socket_remove_connection_handle(client_fd);
+		secure_socket_destroy_handle(client_fd);
 		return FALSE;
 	}
 
 	if ((cond & G_IO_ERR) || (cond & G_IO_HUP) || (cond & G_IO_NVAL)) {
 		DbgPrint("Client connection is lost\n");
 		invoke_disconn_cb_list(client_fd);
-		secure_socket_remove_connection_handle(client_fd);
+		secure_socket_destroy_handle(client_fd);
 		return FALSE;
 	}
 
-	if (ioctl(client_fd, FIONREAD, &readsize) < 0 || readsize == 0) {
-		DbgPrint("Client is disconencted (fd: %d, readsize: %d)\n", client_fd, readsize);
-		invoke_disconn_cb_list(client_fd);
-		secure_socket_remove_connection_handle(client_fd);
-		return FALSE;
-	}
-
-	ret = cbdata->service_cb(client_fd, readsize, cbdata->data);
+	ret = cbdata->service_cb(client_fd, cbdata->data);
 	if (ret < 0) {
-		DbgPrint("service callback returns < 0\n");
+		DbgPrint("service callback returns %d < 0\n", ret);
 		invoke_disconn_cb_list(client_fd);
-		secure_socket_remove_connection_handle(client_fd);
+		secure_socket_destroy_handle(client_fd);
 		return FALSE;
 	}
 
@@ -145,7 +138,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	gio = g_io_channel_unix_new(client_fd);
 	if (!gio) {
 		ErrPrint("Failed to get gio\n");
-		secure_socket_remove_connection_handle(client_fd);
+		secure_socket_destroy_handle(client_fd);
 		free(cbdata);
 		return FALSE;
 	}
@@ -162,7 +155,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 			g_error_free(err);
 		}
 		g_io_channel_unref(gio);
-		secure_socket_remove_connection_handle(client_fd);
+		secure_socket_destroy_handle(client_fd);
 		free(cbdata);
 		return FALSE;
 	}
@@ -174,7 +167,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	return TRUE;
 }
 
-EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)(int fd, int readsize, void *data), void *data)
+EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data)
 {
 	GIOChannel *gio;
 	guint id;
@@ -234,7 +227,7 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 	return fd;
 }
 
-EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)(int fd, int readsize, void *data), void *data)
+EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data)
 {
 	GIOChannel *gio;
 	guint id;
@@ -313,6 +306,112 @@ EAPI int com_core_add_event_callback(enum com_core_event_type type, int (*evt_cb
 	return 0;
 }
 
+EAPI int com_core_recv(int handle, char *buffer, int size, int *sender_pid, double timeout)
+{
+	int readsize;
+	int ret;
+
+	readsize = 0;
+	while (size > 0) {
+		if (timeout > 0.0f) {
+			struct timeval tv;
+			fd_set set;
+
+			FD_ZERO(&set);
+			FD_SET(handle, &set);
+
+			tv.tv_sec = (unsigned long)timeout;
+			tv.tv_usec = (timeout - (unsigned long)timeout) * 1000000u;
+
+			ret = select(handle + 1, &set, NULL, NULL, &tv);
+			if (ret < 0) {
+				/*!< Error */
+				ret = -errno;
+				ErrPrint("Error: %s\n", strerror(errno));
+				return ret;
+			} else if (ret == 0) {
+				/*!< Timeout */
+				ErrPrint("Timeout expired\n");
+				return -ETIMEDOUT;
+			}
+
+			if (!FD_ISSET(handle, &set)) {
+				ErrPrint("Unexpected handle is toggled\n");
+				return -EINVAL;
+			}
+		}
+
+		ret = secure_socket_recv(handle, buffer + readsize, size, sender_pid);
+		if (ret < 0) {
+			if (ret == -EAGAIN) {
+				DbgPrint("Retry to get data (%d:%d)\n", readsize, size);
+				continue;
+			}
+			return ret;
+		} else if (ret == 0) {
+			return 0;
+		}
+
+		size -= ret;
+		readsize += ret;
+	}
+
+	return readsize;
+}
+
+EAPI int com_core_send(int handle, const char *buffer, int size, double timeout)
+{
+	int writesize;
+	int ret;
+
+	writesize = 0;
+	while (size > 0) {
+		if (timeout > 0.0f) {
+			struct timeval tv;
+			fd_set set;
+
+			FD_ZERO(&set);
+			FD_SET(handle, &set);
+
+			tv.tv_sec = (unsigned long)timeout;
+			tv.tv_usec = (timeout - (unsigned long)timeout) * 1000000u;
+
+			ret = select(handle + 1, NULL, &set, NULL, &tv);
+			if (ret < 0) {
+				ret = -errno;
+				ErrPrint("Error: %s\n", strerror(errno));
+				return ret;
+			} else if (ret == 0) {
+				ErrPrint("Timeout expired\n");
+				return -ETIMEDOUT;
+			}
+
+			if (!FD_ISSET(handle, &set)) {
+				ErrPrint("Unexpected handle is toggled\n");
+				return -EINVAL;
+			}
+		}
+
+		ret = secure_socket_send(handle, buffer + writesize, size);
+		if (ret < 0) {
+			if (ret == -EAGAIN) {
+				DbgPrint("Retry to send data (%d:%d)\n", writesize, size);
+				continue;
+			}
+			DbgPrint("Failed to send: %d\n", ret);
+			return ret;
+		} else if (ret == 0) {
+			DbgPrint("Disconnected? : Send bytes: 0\n");
+			return 0;
+		}
+
+		size -= ret;
+		writesize += ret;
+	}
+
+	return writesize;
+}
+
 EAPI void *com_core_del_event_callback(enum com_core_event_type type, int (*cb)(int handle, void *data), void *data)
 {
 	struct dlist *l;
@@ -346,15 +445,15 @@ EAPI void *com_core_del_event_callback(enum com_core_event_type type, int (*cb)(
 
 EAPI int com_core_server_destroy(int handle)
 {
-	if (close(handle) < 0)
-		ErrPrint("Close error[%d]: %s\n", handle, strerror(errno));
+	DbgPrint("Close server handle[%d]\n", handle);
+	secure_socket_destroy_handle(handle);
 	return 0;
 }
 
 EAPI int com_core_client_destroy(int handle)
 {
-	if (close(handle) < 0)
-		ErrPrint("Close error[%d]: %s\n", handle, strerror(errno));
+	DbgPrint("Close client handle[%d]\n", handle);
+	secure_socket_destroy_handle(handle);
 	return 0;
 }
 

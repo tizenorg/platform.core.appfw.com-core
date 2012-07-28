@@ -138,16 +138,6 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
 	return handle;
 }
 
-EAPI int secure_socket_remove_connection_handle(int conn_handle)
-{
-	if (close(conn_handle) < 0) {
-		ErrPrint("Close a handle: %s\n", strerror(errno));
-		return -1;
-	}
-
-	return 0;
-}
-
 EAPI int secure_socket_send(int handle, const char *buffer, int size)
 {
 	struct msghdr msg;
@@ -156,7 +146,7 @@ EAPI int secure_socket_send(int handle, const char *buffer, int size)
 
 	if (!buffer || size <= 0) {
 		ErrPrint("Reject: 0 byte data sending\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	memset(&msg, 0, sizeof(msg));
@@ -167,12 +157,13 @@ EAPI int secure_socket_send(int handle, const char *buffer, int size)
 
 	ret = sendmsg(handle, &msg, 0);
 	if (ret < 0) {
+		ret = -errno;
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
 			ErrPrint("handle[%d] size[%d] Try again [%s]\n", handle, size, strerror(errno));
-			return 0;
+			return -EAGAIN;
 		}
 		ErrPrint("Failed to send message [%s]\n", strerror(errno));
-		return -1;
+		return ret;
 	}
 
 	return iov.iov_len;
@@ -184,9 +175,10 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 	struct cmsghdr *cmsg;
 	struct iovec iov;
 	char control[1024];
+	int ret;
 
 	if (!sender_pid || size <= 0 || !buffer)
-		return -1;
+		return -EINVAL;
 
 	memset(&msg, 0, sizeof(msg));
 	iov.iov_base = buffer;
@@ -196,14 +188,22 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 	msg.msg_control = control;
 	msg.msg_controllen = sizeof(control);
 
-	if (recvmsg(handle, &msg, 0) < 0) {
+	ret = recvmsg(handle, &msg, 0);
+	if (ret == 0) {
+		/*!< Disconnected */
+		DbgPrint("Disconnected\n");
+		return 0;
+	}
+
+	if (ret < 0) {
+		ret = -errno;
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
 			ErrPrint("handle[%d] size[%d] Try again [%s]\n", handle, size, strerror(errno));
-			return 0;
+			return -EAGAIN;
 		}
 
 		ErrPrint("Failed to recvmsg [%s]\n", strerror(errno));
-		return -1;
+		return ret;
 	}
 
 	cmsg = CMSG_FIRSTHDR(&msg);
@@ -221,8 +221,9 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 	return iov.iov_len;
 }
 
-EAPI int secure_socket_destroy(int handle)
+EAPI int secure_socket_destroy_handle(int handle)
 {
+	DbgPrint("Close socket handle %d\n", handle);
 	if (close(handle) < 0) {
 		ErrPrint("Failed to close a handle: %s\n", strerror(errno));
 		return -1;

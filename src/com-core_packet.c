@@ -6,7 +6,6 @@
 #include <fcntl.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/ioctl.h>
 
 #include <glib.h>
 #include <dlog.h>
@@ -19,7 +18,7 @@
 #include "com-core_packet.h"
 #include "util.h"
 
-#define DEFAULT_TIMEOUT 2
+#define DEFAULT_TIMEOUT 2.0f
 
 static struct info {
 	struct dlist *recv_list;
@@ -38,8 +37,6 @@ struct request_ctx {
 	struct packet *packet;
 	int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data);
 	void *data;
-
-	guint timeout;
 };
 
 struct recv_ctx {
@@ -53,9 +50,10 @@ struct recv_ctx {
 	int offset;
 	pid_t pid;
 	struct packet *packet;
+	double timeout;
 };
 
-static inline struct request_ctx *find_request_ctx(int handle, unsigned long seq)
+static inline struct request_ctx *find_request_ctx(int handle, double seq)
 {
 	struct request_ctx *ctx;
 	struct dlist *l;
@@ -71,9 +69,6 @@ static inline struct request_ctx *find_request_ctx(int handle, unsigned long seq
 
 static inline void destroy_request_ctx(struct request_ctx *ctx)
 {
-	if (ctx->timeout > 0)
-		g_source_remove(ctx->timeout);
-
 	packet_unref(ctx->packet);
 	dlist_remove_data(s_info.request_list, ctx);
 	free(ctx);
@@ -119,7 +114,7 @@ static inline void destroy_recv_ctx(struct recv_ctx *ctx)
 	free(ctx);
 }
 
-static inline struct recv_ctx *create_recv_ctx(int handle)
+static inline struct recv_ctx *create_recv_ctx(int handle, double timeout)
 {
 	struct recv_ctx *ctx;
 
@@ -134,22 +129,22 @@ static inline struct recv_ctx *create_recv_ctx(int handle)
 	ctx->packet = NULL;
 	ctx->handle = handle;
 	ctx->pid = (pid_t)-1;
+	ctx->timeout = timeout;
 
 	s_info.recv_list = dlist_append(s_info.recv_list, ctx);
 	return ctx;
 }
 
-static inline void packet_ready(int handle, const struct recv_ctx *receive, struct method *table)
+static inline int packet_ready(int handle, const struct recv_ctx *receive, struct method *table)
 {
 	struct request_ctx *request;
-	unsigned long sequence;
+	double sequence;
 	struct packet *result;
 	register int i;
+	int ret;
 
-	/*!
-	 * \note
-	 * Is this ack packet?
-	 */
+	ret = 0;
+
 	switch (packet_type(receive->packet)) {
 	case PACKET_ACK:
 		sequence = packet_seq(receive->packet);
@@ -171,10 +166,12 @@ static inline void packet_ready(int handle, const struct recv_ctx *receive, stru
 
 			result = table[i].handler(receive->pid, handle, receive->packet);
 			if (result) {
-				int ret;
-				ret = secure_socket_send(handle, (void *)packet_data(result), packet_size(result));
-				if (ret < 0)
+				ret = com_core_send(handle, (void *)packet_data(result), packet_size(result), DEFAULT_TIMEOUT);
+				if (ret < 0) {
 					ErrPrint("Failed to send an ack packet\n");
+				} else {
+					ret = 0;
+				}
 				packet_destroy(result);
 			}
 			break;
@@ -195,7 +192,10 @@ static inline void packet_ready(int handle, const struct recv_ctx *receive, stru
 		break;
 	}
 
-	return;
+	/*!
+	 * Return negative value will make call the disconnected_cb
+	 */
+	return ret;
 }
 
 static int client_disconnected_cb(int handle, void *data)
@@ -206,27 +206,28 @@ static int client_disconnected_cb(int handle, void *data)
 	struct dlist *n;
 	pid_t pid = (pid_t)-1;
 
-	DbgPrint("Clean up all requests and a receive context\n");
-
 	receive = find_recv_ctx(handle);
 	if (receive) {
 		pid = receive->pid;
 		destroy_recv_ctx(receive);
 	}
 
-	dlist_foreach_safe(s_info.request_list, l, n, request) {
-		if (request->handle == handle) {
-			if (request->recv_cb)
-				request->recv_cb(pid, handle, NULL, request->data);
+	DbgPrint("Clean up all requests and a receive context for handle(%d) for pid(%d)\n", handle, pid);
 
-			destroy_request_ctx(request);
-		}
+	dlist_foreach_safe(s_info.request_list, l, n, request) {
+		if (request->handle != handle)
+			continue;
+
+		if (request->recv_cb)
+			request->recv_cb(pid, handle, NULL, request->data);
+
+		destroy_request_ctx(request);
 	}
 
 	return 0;
 }
 
-static int service_cb(int handle, int readsize, void *data)
+static int service_cb(int handle, void *data)
 {
 	struct recv_ctx *receive;
 	pid_t pid;
@@ -236,37 +237,39 @@ static int service_cb(int handle, int readsize, void *data)
 
 	receive = find_recv_ctx(handle);
 	if (!receive)
-		receive = create_recv_ctx(handle);
+		receive = create_recv_ctx(handle, DEFAULT_TIMEOUT);
 
 	if (!receive) {
 		ErrPrint("Couldn't find or create a receive context\n");
 		return -EIO;
 	}
 
-	while (readsize > 0) {
-		switch (receive->state) {
-		case RECV_STATE_INIT:
-			receive->state = RECV_STATE_HEADER;
-			receive->offset = 0;
-		case RECV_STATE_HEADER:
-			size = packet_header_size() - receive->offset;
-			/*!
-			 * \note
-			 * Getting header
-			 */
-			ptr = malloc(size);
-			if (!ptr) {
-				ErrPrint("Heap: %s\n", strerror(errno));
-				destroy_recv_ctx(receive);
-				return -ENOMEM;
-			}
+	switch (receive->state) {
+	case RECV_STATE_INIT:
+		receive->state = RECV_STATE_HEADER;
+		receive->offset = 0;
+	case RECV_STATE_HEADER:
+		size = packet_header_size() - receive->offset;
+		/*!
+		 * \note
+		 * Getting header
+		 */
+		ptr = malloc(size);
+		if (!ptr) {
+			ErrPrint("Heap: %s\n", strerror(errno));
+			return -ENOMEM;
+		}
 
-			ret = secure_socket_recv(handle, ptr, size, &pid);
-			if (ret < 0 || (receive->pid != -1 && receive->pid != pid)) {
+		ret = com_core_recv(handle, ptr, size, &pid, receive->timeout);
+		if (ret < 0) {
+			ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
+			free(ptr);
+			return -EIO; /*!< Return negative value will invoke the client_disconnected_cb */
+		} else if (ret > 0) {
+			if (receive->pid != -1 && receive->pid != pid) {
 				ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
 				free(ptr);
-				destroy_recv_ctx(receive);
-				return -EIO;
+				return -EIO; /*!< Return negative value will invoke the client_disconnected_cb */
 			}
 
 			receive->pid = pid;
@@ -275,41 +278,48 @@ static int service_cb(int handle, int readsize, void *data)
 
 			if (!receive->packet) {
 				ErrPrint("Built packet is not valid\n");
-				destroy_recv_ctx(receive);
-				return -EFAULT;
+				return -EFAULT; /*!< Return negative value will invoke the client_disconnected_cb */
 			}
 
 			receive->offset += ret;
-			readsize -= ret;
+
 			if (receive->offset == packet_header_size()) {
 				if (packet_size(receive->packet) == receive->offset)
 					receive->state = RECV_STATE_READY;
 				else
 					receive->state = RECV_STATE_BODY;
 			}
+		} else {
+			DbgPrint("ZERO bytes receives(%d)\n", pid);
+			free(ptr);
+			return -ECONNRESET;
+		}
+		break;
+	case RECV_STATE_BODY:
+		size = packet_size(receive->packet) - receive->offset;
+		if (size == 0) {
+			receive->state = RECV_STATE_READY;
 			break;
-		case RECV_STATE_BODY:
-			size = packet_size(receive->packet) - receive->offset;
-			if (size == 0) {
-				receive->state = RECV_STATE_READY;
-				break;
-			}
-			/*!
-			 * \note
-			 * Getting body
-			 */
-			ptr = malloc(size);
-			if (!ptr) {
-				ErrPrint("Heap: %s\n", strerror(errno));
-				destroy_recv_ctx(receive);
-				return -ENOMEM;
-			}
+		}
+		/*!
+		 * \note
+		 * Getting body
+		 */
+		ptr = malloc(size);
+		if (!ptr) {
+			ErrPrint("Heap: %s\n", strerror(errno));
+			return -ENOMEM;
+		}
 
-			ret = secure_socket_recv(handle, ptr, size, &pid);
-			if (ret < 0 || receive->pid != pid) {
+		ret = com_core_recv(handle, ptr, size, &pid, receive->timeout);
+		if (ret < 0) {
+			ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
+			free(ptr);
+			return -EIO;
+		} else if (ret > 0) {
+			if (receive->pid != pid) {
 				ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
 				free(ptr);
-				destroy_recv_ctx(receive);
 				return -EIO;
 			}
 
@@ -317,54 +327,49 @@ static int service_cb(int handle, int readsize, void *data)
 			free(ptr);
 
 			if (!receive->packet) {
-				destroy_recv_ctx(receive);
+				ErrPrint("Built packet is not valid\n");
 				return -EFAULT;
 			}
 
 			receive->offset += ret;
-			readsize -= ret;
+
 			if (receive->offset == packet_size(receive->packet))
 				receive->state = RECV_STATE_READY;
-			break;
-		case RECV_STATE_READY:
-		default:
-			break;
+		} else {
+			DbgPrint("ZERO bytes receives(%d)\n", pid);
+			free(ptr);
+			return -ECONNRESET;
 		}
 
-		if (receive->state == RECV_STATE_READY) {
-			packet_ready(handle, receive, data);
-			destroy_recv_ctx(receive);
-			/*!
-			 * \note
-			 * Just quit from this function
-			 * Even if we have read size
-			 * Next time is comming soon ;)
-			 */
-			break;
-		}
+		break;
+	case RECV_STATE_READY:
+	default:
+		break;
 	}
 
-	return 0;
+	if (receive->state == RECV_STATE_READY) {
+		ret = packet_ready(handle, receive, data);
+		if (ret == 0)
+			destroy_recv_ctx(receive);
+		/*!
+		 * if ret is negative value, disconnected_cb will be called after this function
+		 */
+	} else {
+		ret = 0;
+	}
+
+	return ret;
 }
 
-static gboolean timeout_cb(gpointer data)
-{
-	struct request_ctx *ctx = data;
-
-	ErrPrint("Timeout (Not responding in time)\n");
-
-	if (ctx->recv_cb)
-		ctx->recv_cb(ctx->pid, ctx->handle, NULL, ctx->data);
-
-	ctx->timeout = 0u;
-	destroy_request_ctx(ctx);
-	return FALSE;
-}
-
-EAPI int com_core_packet_async_send(int handle, struct packet *packet, unsigned int timeout, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data)
+EAPI int com_core_packet_async_send(int handle, struct packet *packet, double timeout, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data)
 {
 	int ret;
 	struct request_ctx *ctx;
+
+	if (packet_type(packet) != PACKET_REQ) {
+		ErrPrint("Invalid packet - should be PACKET_REQ\n");
+		return -EINVAL;
+	}
 
 	ctx = create_request_ctx(handle);
 	if (!ctx)
@@ -373,13 +378,8 @@ EAPI int com_core_packet_async_send(int handle, struct packet *packet, unsigned 
 	ctx->recv_cb = recv_cb;
 	ctx->data = data;
 	ctx->packet = packet_ref(packet);
-	if (timeout > 0) {
-		ctx->timeout = g_timeout_add(timeout, timeout_cb, ctx);
-		if (ctx->timeout == 0)
-			ErrPrint("Failed to add timeout\n");
-	}
 
-	ret = secure_socket_send(handle, (void *)packet_data(packet), packet_size(packet));
+	ret = com_core_send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
 	if (ret != packet_size(packet)) {
 		ErrPrint("Send failed. %d <> %d (handle: %d)\n", ret, packet_size(packet), handle);
 		destroy_request_ctx(ctx);
@@ -393,24 +393,28 @@ EAPI int com_core_packet_send_only(int handle, struct packet *packet)
 {
 	int ret;
 
-	ret = secure_socket_send(handle, (void *)packet_data(packet), packet_size(packet));
-	if (ret != packet_size(packet))
+	if (packet_type(packet) != PACKET_REQ_NOACK) {
+		ErrPrint("Invalid type - should be PACKET_REQ_NOACK\n");
+		return -EINVAL;
+	}
+
+	ret = com_core_send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+	if (ret != packet_size(packet)) {
+		ErrPrint("Failed to send whole packet\n");
 		return -EIO;
+	}
 
 	return 0;
 }
 
-EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet *packet)
+EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet *packet, double timeout)
 {
 	int ret;
-	int sz;
 	int fd;
 	pid_t pid;
 	int offset;
 	struct packet *result = NULL;
 	void *ptr;
-	struct timeval timeout;
-	fd_set set;
 
 	fd = secure_socket_create_client(addr);
 	if (fd < 0)
@@ -424,96 +428,60 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 		ErrPrint("Error: %s\n", strerror(errno));
 
-	ret = secure_socket_send(fd, (char *)packet_data(packet), packet_size(packet));
-	if (ret < 0) {
-		secure_socket_destroy(fd);
-		return NULL;
-	}
+	ret = com_core_send(fd, (char *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+	if (ret < 0)
+		goto out;
+
 	DbgPrint("Sent: %d bytes (%d bytes)\n", ret, packet_size(packet));
 
-	FD_ZERO(&set);
-	FD_SET(fd, &set);
-
-	timeout.tv_sec = DEFAULT_TIMEOUT;
-	timeout.tv_usec = 0;
-
-	ret = select(fd + 1, &set, NULL, NULL, &timeout);
-	if (ret < 0) {
-		ErrPrint("Error: %s\n", strerror(errno));
-		secure_socket_destroy(fd);
-		return NULL;
-	} else if (ret != 1) {
-		ErrPrint("Timeout (%d)\n", ret);
-		secure_socket_destroy(fd);
-		return NULL;
-	}
-
-	if (!FD_ISSET(fd, &set)) {
-		ErrPrint("Invalid handle\n");
-		secure_socket_destroy(fd);
-		return NULL;
-	}
-
-	if (ioctl(fd, FIONREAD, &sz) < 0 || sz == 0) {
-		ErrPrint("Connection closed\n");
-		secure_socket_destroy(fd);
-		return NULL;
-	}
-
-	DbgPrint("Readable size: %d\n", sz);
-	if (sz < packet_header_size()) {
-		ErrPrint("Invalid packet [SIZE: %d]\n", sz);
-		secure_socket_destroy(fd);
-		return NULL;
-	}
-
-	offset = 0;
 	ptr = malloc(packet_header_size());
 	if (!ptr) {
 		ErrPrint("Heap: %s\n", strerror(errno));
-		secure_socket_destroy(fd);
-		return NULL;
+		goto out;
 	}
 
-	ret = secure_socket_recv(fd, (char *)ptr, packet_header_size(), &pid);
-	if (ret < 0) {
+	offset = 0;
+	ret = com_core_recv(fd, (char *)ptr, packet_header_size(), &pid, timeout);
+	if (ret <= 0) {
+		DbgPrint("Recv returns %s\n", ret);
 		free(ptr);
-		secure_socket_destroy(fd);
-		return NULL;
+		goto out;
+	} else {
+		DbgPrint("Recv'd size: %d (header: %d) pid: %d\n", ret, packet_header_size(), pid);
+		result = packet_build(result, offset, ptr, ret);
+		offset += ret;
+		free(ptr);
+		if (!result) {
+			ErrPrint("Failed to build a packet\n");
+			goto out;
+		}
 	}
-	DbgPrint("Recv'd size: %d (header: %d)\n", ret, packet_header_size());
-	result = packet_build(result, offset, ptr, ret);
-	offset += ret;
-	free(ptr);
 
 	DbgPrint("Payload size: %d\n", packet_payload_size(result));
-	if (sz < packet_payload_size(result) + packet_header_size()) {
-		ErrPrint("Invalid packet [%d <> %d]\n", sz, packet_payload_size(result) + packet_header_size());
-		secure_socket_destroy(fd);
-		packet_destroy(result);
-		return NULL;
-	}
 
 	ptr = malloc(packet_payload_size(result));
 	if (!ptr) {
 		ErrPrint("Heap: %s\n", strerror(errno));
-		secure_socket_destroy(fd);
 		packet_destroy(result);
-		return NULL;
+		result = NULL;
+		goto out;
 	}
 
-	ret = secure_socket_recv(fd, (char *)ptr, packet_payload_size(result), &pid);
-	if (ret < 0) {
+	ret = com_core_recv(fd, (char *)ptr, packet_payload_size(result), &pid, timeout);
+	if (ret <= 0) {
+		DbgPrint("Recv returns %s\n", ret);
 		free(ptr);
-		secure_socket_destroy(fd);
 		packet_destroy(result);
-		return NULL;
+		result = NULL;
+	} else {
+		DbgPrint("Recv'd %d bytes (pid: %d)\n", ret, pid);
+		result = packet_build(result, offset, ptr, ret);
+		offset += ret;
+		free(ptr);
 	}
-	result = packet_build(result, offset, ptr, ret);
-	offset += ret;
-	free(ptr);
 
-	secure_socket_destroy(fd);
+out:
+	secure_socket_destroy_handle(fd);
 	DbgPrint("Close connection: %d\n", fd);
 	return result;
 }

@@ -38,7 +38,6 @@ extern int secure_socket_create_server(const char *peer);
  * Get the raw handle to use it for non-blocking mode.
  */
 extern int secure_socket_get_connection_handle(int server_handle);
-extern int secure_socket_remove_connection_handle(int conn_handle);
 
 /*
  * Send data to the connected peer.
@@ -53,7 +52,7 @@ extern int secure_socket_recv(int conn, char *buffer, int size, int *sender_pid)
 /*
  * Destroy a connection
  */
-extern int secure_socket_destroy(int conn);
+extern int secure_socket_destroy_handle(int conn);
 
 #ifdef __cplusplus
 }

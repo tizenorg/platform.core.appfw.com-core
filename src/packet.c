@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include <dlog.h>
 
@@ -12,19 +13,13 @@
 
 int errno;
 
-struct {
-	unsigned long seq;
-} s_info = {
-	.seq = 0lu,
-};
-
 struct data {
 	struct {
 		int version;
 		int payload_size;
 		char command[PACKET_MAX_CMD];
 		enum packet_type type;
-		unsigned long seq;
+		double seq;
 	} head;
 
 	char payload[];
@@ -70,7 +65,7 @@ EAPI const int const packet_size(const struct packet *packet)
 	return sizeof(*packet->data) + packet->data->head.payload_size;
 }
 
-EAPI const unsigned long const packet_seq(const struct packet *packet)
+EAPI const double const packet_seq(const struct packet *packet)
 {
 	if (!packet || packet->state != VALID || !packet->data)
 		return 0;
@@ -231,6 +226,7 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 	struct packet *packet;
 	int payload_size;
 	va_list va;
+	struct timeval tv;
 
 	if (strlen(cmd) >= PACKET_MAX_CMD) {
 		ErrPrint("Command is too long\n");
@@ -254,7 +250,8 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 	}
 
 	packet->state = VALID;
-	packet->data->head.seq = s_info.seq++;
+	gettimeofday(&tv, NULL);
+	packet->data->head.seq = tv.tv_sec + tv.tv_usec / 1000000.0f;
 	packet->data->head.type = PACKET_REQ;
 	packet->data->head.version = PACKET_VERSION;
 	strncpy(packet->data->head.command, cmd, sizeof(packet->data->head.command));
@@ -273,6 +270,7 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 	int payload_size;
 	struct packet *result;
 	va_list va;
+	struct timeval tv;
 
 	if (strlen(cmd) >= PACKET_MAX_CMD) {
 		ErrPrint("Command is too long\n");
@@ -296,7 +294,8 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 	}
 
 	result->state = VALID;
-	result->data->head.seq = s_info.seq++;
+	gettimeofday(&tv, NULL);
+	result->data->head.seq = tv.tv_sec + tv.tv_usec / 1000000.0f;
 	result->data->head.type = PACKET_REQ_NOACK;
 	result->data->head.version = PACKET_VERSION;
 	strncpy(result->data->head.command, cmd, sizeof(result->data->head.command));

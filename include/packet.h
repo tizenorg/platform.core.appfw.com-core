@@ -23,7 +23,7 @@ extern struct packet *packet_ref(struct packet *packet);
 extern struct packet *packet_unref(struct packet *packet);
 
 extern const void * const packet_data(const struct packet *packet);
-extern const unsigned long const packet_seq(const struct packet *packet);
+extern const double const packet_seq(const struct packet *packet);
 extern const enum packet_type const packet_type(const struct packet *packet);
 extern const int const packet_version(const struct packet *packet);
 extern const int const packet_payload_size(const struct packet *packet);
