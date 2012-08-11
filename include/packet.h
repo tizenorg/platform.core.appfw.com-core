@@ -1,3 +1,22 @@
+/*
+ * Copyright 2012  Samsung Electronics Co., Ltd
+ *
+ * Licensed under the Flora License, Version 1.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.tizenopensource.org/license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef _PACKET_H
+#define _PACKET_H
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,4 +56,5 @@ extern struct packet *packet_build(struct packet *packet, int offset, void *data
 }
 #endif
 
+#endif
 /* End of a file */

@@ -3,7 +3,7 @@ Summary: Library for the light-weight IPC
 Version: 0.2.0
 Release: 1
 Group: main/util
-License: Samsung Proprietary License
+License: Flora License
 Source0: %{name}-%{version}.tar.gz
 BuildRequires: cmake, gettext-tools
 BuildRequires: pkgconfig(dlog)

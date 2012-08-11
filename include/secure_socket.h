@@ -1,23 +1,21 @@
 /*
- * com.samsung.live-magazine
+ * Copyright 2012  Samsung Electronics Co., Ltd
  *
- * Copyright (c) 2011 Samsung Electronics Co., Ltd. All rights reserved.
- *
- * Contact: Sung-jae Park <nicesj.park@samsung.com>, Youngjoo Park <yjoo93.park@samsung.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
+ * Licensed under the Flora License, Version 1.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.tizenopensource.org/license
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
+
+#ifndef _SECURE_SOCKET_H
+#define _SECURE_SOCKET_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,4 +56,5 @@ extern int secure_socket_destroy_handle(int conn);
 }
 #endif
 
+#endif
 /* End of a file */
