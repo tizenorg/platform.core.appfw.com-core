@@ -1,6 +1,6 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.2.0
+Version: 0.2.1
 Release: 1
 Group: main/util
 License: Flora License
