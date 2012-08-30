@@ -157,16 +157,29 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 		case 'S':
 			str = (char *)va_arg(va, char *);
 
-			packet->data->head.payload_size += strlen(str) + 1; /*!< Including NIL */
-			packet->data = check_and_expand_packet(packet->data, &payload_size);
-			if (!packet->data) {
-				packet->state = INVALID;
-				free(packet);
-				packet = NULL;
-				goto out;
-			}
+			if (str) {
+				packet->data->head.payload_size += strlen(str) + 1; /*!< Including NIL */
+				packet->data = check_and_expand_packet(packet->data, &payload_size);
+				if (!packet->data) {
+					packet->state = INVALID;
+					free(packet);
+					packet = NULL;
+					goto out;
+				}
 
-			strcpy(payload, str); /*!< Including NIL */
+				strcpy(payload, str); /*!< Including NIL */
+			} else {
+				packet->data->head.payload_size += 1;
+				packet->data = check_and_expand_packet(packet->data, &payload_size);
+				if (!packet->data) {
+					packet->state = INVALID;
+					free(packet);
+					packet = NULL;
+					goto out;
+				}
+
+				payload[0] = '\0';
+			}
 			break;
 		case 'd':
 		case 'D':
