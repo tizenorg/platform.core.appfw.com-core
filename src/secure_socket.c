@@ -248,4 +248,5 @@ EAPI int secure_socket_destroy_handle(int handle)
 }
 
 #undef _GNU_SOURCE
+
 /* End of a file */
