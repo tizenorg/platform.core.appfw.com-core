@@ -327,34 +327,40 @@ EAPI int com_core_recv(int handle, char *buffer, int size, int *sender_pid, doub
 	int readsize;
 	int ret;
 
+	fd_set set;
+
 	readsize = 0;
 	while (size > 0) {
+		FD_ZERO(&set);
+		FD_SET(handle, &set);
+
 		if (timeout > 0.0f) {
 			struct timeval tv;
-			fd_set set;
-
-			FD_ZERO(&set);
-			FD_SET(handle, &set);
 
 			tv.tv_sec = (unsigned long)timeout;
 			tv.tv_usec = (timeout - (unsigned long)timeout) * 1000000u;
-
 			ret = select(handle + 1, &set, NULL, NULL, &tv);
-			if (ret < 0) {
-				/*!< Error */
-				ret = -errno;
-				ErrPrint("Error: %s\n", strerror(errno));
-				return ret;
-			} else if (ret == 0) {
-				/*!< Timeout */
-				ErrPrint("Timeout expired\n");
-				return -ETIMEDOUT;
-			}
+		} else if (timeout == 0.0f) {
+			ret = select(handle + 1, &set, NULL, NULL, NULL);
+		} else {
+			ErrPrint("Invalid timeout: %lf (it must be greater than 0.0)\n", timeout);
+			return -EINVAL;
+		}
 
-			if (!FD_ISSET(handle, &set)) {
-				ErrPrint("Unexpected handle is toggled\n");
-				return -EINVAL;
-			}
+		if (ret < 0) {
+			/*!< Error */
+			ret = -errno;
+			ErrPrint("Error: %s\n", strerror(errno));
+			return ret;
+		} else if (ret == 0) {
+			/*!< Timeout */
+			ErrPrint("Timeout expired\n");
+			return -ETIMEDOUT;
+		}
+
+		if (!FD_ISSET(handle, &set)) {
+			ErrPrint("Unexpected handle is toggled\n");
+			return -EINVAL;
 		}
 
 		ret = secure_socket_recv(handle, buffer + readsize, size, sender_pid);
@@ -380,32 +386,40 @@ EAPI int com_core_send(int handle, const char *buffer, int size, double timeout)
 	int writesize;
 	int ret;
 
+	fd_set set;
+
 	writesize = 0;
 	while (size > 0) {
+
+		FD_ZERO(&set);
+		FD_SET(handle, &set);
+
 		if (timeout > 0.0f) {
 			struct timeval tv;
-			fd_set set;
-
-			FD_ZERO(&set);
-			FD_SET(handle, &set);
 
 			tv.tv_sec = (unsigned long)timeout;
 			tv.tv_usec = (timeout - (unsigned long)timeout) * 1000000u;
 
 			ret = select(handle + 1, NULL, &set, NULL, &tv);
-			if (ret < 0) {
-				ret = -errno;
-				ErrPrint("Error: %s\n", strerror(errno));
-				return ret;
-			} else if (ret == 0) {
-				ErrPrint("Timeout expired\n");
-				return -ETIMEDOUT;
-			}
+		} else if (timeout == 0.0f) {
+			ret = select(handle + 1, NULL, &set, NULL, NULL);
+		} else {
+			ErrPrint("Invalid timeout: %lf (it must be greater than 0.0)\n", timeout);
+			return -EINVAL;
+		}
 
-			if (!FD_ISSET(handle, &set)) {
-				ErrPrint("Unexpected handle is toggled\n");
-				return -EINVAL;
-			}
+		if (ret < 0) {
+			ret = -errno;
+			ErrPrint("Error: %s\n", strerror(errno));
+			return ret;
+		} else if (ret == 0) {
+			ErrPrint("Timeout expired\n");
+			return -ETIMEDOUT;
+		}
+
+		if (!FD_ISSET(handle, &set)) {
+			ErrPrint("Unexpected handle is toggled\n");
+			return -EINVAL;
 		}
 
 		ret = secure_socket_send(handle, buffer + writesize, size);

@@ -82,14 +82,14 @@ EAPI int secure_socket_create_client(const char *peer)
 		if (close(handle) < 0)
 			ErrPrint("close a handle: %s\n", strerror(errno));
 
-		return -1;
+		return -ENOTCONN;
 	}
 
 	if (setsockopt(handle, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0) {
 		ErrPrint("Failed to change sock opt : %s\n", strerror(errno));
 		if (close(handle) < 0)
 			ErrPrint("close a handle: %s\n", strerror(errno));
-		return -1;
+		return -EFAULT;
 	}
 
 	return handle;
@@ -107,21 +107,24 @@ EAPI int secure_socket_create_server(const char *peer)
 
 	state = bind(handle, &addr, sizeof(addr));
 	if (state < 0) {
+		state = -errno;
+
 		ErrPrint("Failed to bind a socket %s\n", strerror(errno));
 		if (close(handle) < 0)
 			ErrPrint("Close a handle : %s\n", strerror(errno));
 
-		return -1;
+		return state;
 	}
 
 	state = listen(handle, BACKLOG);
 	if (state < 0) {
+		state = -errno;
 		ErrPrint("Failed to listen a socket %s\n", strerror(errno));
 
 		if (close(handle) < 0)
 			ErrPrint("Close a handle : %s\n", strerror(errno));
 
-		return -1;
+		return state;
 	}
 
 	if (chmod(peer, 0666) < 0)
@@ -140,15 +143,18 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
 
 	handle = accept(server_handle, (struct sockaddr *)&addr, &size);
 	if (handle < 0) {
+		handle = -errno;
 		ErrPrint("Failed to accept a new client %s\n", strerror(errno));
-		return -1;
+		return handle;
 	}
 
 	if (setsockopt(handle, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0) {
+		int ret;
+		ret = -errno;
 		ErrPrint("Failed to change sock opt : %s\n", strerror(errno));
 		if (close(handle) < 0)
 			ErrPrint("Close a handle: %s\n", strerror(errno));
-		return -1;
+		return ret;
 	}
 
 	return handle;

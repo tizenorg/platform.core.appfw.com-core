@@ -410,7 +410,7 @@ EAPI int com_core_packet_send_only(int handle, struct packet *packet)
 	int ret;
 
 	if (packet_type(packet) != PACKET_REQ_NOACK) {
-		ErrPrint("Invalid type - should be PACKET_REQ_NOACK\n");
+		ErrPrint("Invalid type - should be PACKET_REQ_NOACK (%p)\n", packet);
 		return -EINVAL;
 	}
 
