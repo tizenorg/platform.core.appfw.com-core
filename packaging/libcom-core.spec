@@ -1,6 +1,6 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.2.3
+Version: 0.2.4
 Release: 1
 Group: main/util
 License: Flora License
@@ -33,7 +33,8 @@ rm -rf %{buildroot}
 
 %post
 
-%files
+%files -n libcom-core
+%manifest libcom-core.manifest
 %defattr(-,root,root,-)
 /usr/lib/*.so*
 
