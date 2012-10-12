@@ -1,5 +1,0 @@
-@PREFIX@/include/@PROJECT_NAME@/com-core.h
-@PREFIX@/include/@PROJECT_NAME@/packet.h
-@PREFIX@/include/@PROJECT_NAME@/com-core_packet.h
-@PREFIX@/include/@PROJECT_NAME@/secure_socket.h
-@PREFIX@/lib/pkgconfig/*.pc
