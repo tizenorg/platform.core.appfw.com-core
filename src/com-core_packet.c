@@ -252,12 +252,12 @@ static int service_cb(int handle, void *data)
 	char *ptr;
 
 	receive = find_recv_ctx(handle);
-	if (!receive)
-		receive = create_recv_ctx(handle, DEFAULT_TIMEOUT);
-
 	if (!receive) {
-		ErrPrint("Couldn't find or create a receive context\n");
-		return -EIO;
+		receive = create_recv_ctx(handle, DEFAULT_TIMEOUT);
+		if (!receive) {
+			ErrPrint("Couldn't find or create a receive context\n");
+			return -EIO;
+		}
 	}
 
 	switch (receive->state) {
