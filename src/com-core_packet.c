@@ -431,6 +431,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	int offset;
 	struct packet *result = NULL;
 	void *ptr;
+	int size;
 
 	fd = secure_socket_create_client(addr);
 	if (fd < 0)
@@ -473,9 +474,20 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 		}
 	}
 
-	DbgPrint("Payload size: %d\n", packet_payload_size(result));
+	size = packet_payload_size(result);
+	DbgPrint("Payload size: %d\n", size);
+	if (size < 0) {
+		packet_destroy(result);
+		result = NULL;
+		goto out;
+	}
 
-	ptr = malloc(packet_payload_size(result));
+	if (size == 0) {
+		DbgPrint("Has no payload\n");
+		goto out;
+	}
+
+	ptr = malloc(size);
 	if (!ptr) {
 		ErrPrint("Heap: %s\n", strerror(errno));
 		packet_destroy(result);
@@ -483,7 +495,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 		goto out;
 	}
 
-	ret = com_core_recv(fd, (char *)ptr, packet_payload_size(result), &pid, timeout);
+	ret = com_core_recv(fd, (char *)ptr, size, &pid, timeout);
 	if (ret <= 0) {
 		DbgPrint("Recv returns %s\n", ret);
 		free(ptr);
