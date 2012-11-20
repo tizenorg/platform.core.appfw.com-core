@@ -25,5 +25,6 @@ extern FILE *__file_log_fp;
 #endif
 
 #define EAPI __attribute__((visibility("default")))
+#define HAPI __attribute__((visibility("hidden")))
 
 /* End of a file */

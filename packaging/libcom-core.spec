@@ -1,6 +1,6 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.2.6
+Version: 0.3.0
 Release: 1
 Group: main/util
 License: Flora License
@@ -44,6 +44,7 @@ mkdir -p %{buildroot}/usr/share/license
 /usr/include/com-core/com-core.h
 /usr/include/com-core/packet.h
 /usr/include/com-core/com-core_packet.h
+/usr/include/com-core/com-core_thread.h
 /usr/include/com-core/secure_socket.h
 /usr/lib/pkgconfig/*.pc
 /usr/share/license/*

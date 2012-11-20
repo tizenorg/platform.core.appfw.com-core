@@ -31,6 +31,10 @@ extern int com_core_client_create(const char *addr, int is_sync, int (*service_c
 extern int com_core_server_destroy(int handle);
 extern int com_core_client_destroy(int handle);
 
+/*!
+ * \brief Used to handling the changing event of connection status.
+ *        These two functions can be work with com_core_thread series functions.
+ */
 extern int com_core_add_event_callback(enum com_core_event_type type, int (*service_cb)(int handle, void *data), void *data);
 extern void *com_core_del_event_callback(enum com_core_event_type type, int (*service_cb)(int handle, void *data), void *data);
 

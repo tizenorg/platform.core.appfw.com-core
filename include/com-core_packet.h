@@ -33,6 +33,7 @@ extern int com_core_packet_client_init(const char *addr, int is_sync, struct met
 extern int com_core_packet_client_fini(int handle);
 extern int com_core_packet_server_init(const char *addr, struct method *table);
 extern int com_core_packet_server_fini(int handle);
+extern void com_core_packet_use_thread(int flag);
 
 #ifdef __cplusplus
 }

@@ -29,9 +29,9 @@
 
 #include "dlist.h"
 #include "secure_socket.h"
-#include "packet.h"
 #include "debug.h"
 #include "com-core.h"
+#include "com-core_internal.h"
 #include "util.h"
 
 static struct {
@@ -52,7 +52,7 @@ struct evtdata {
 	void *data;
 };
 
-static inline void invoke_con_cb_list(int handle)
+HAPI void invoke_con_cb_list(int handle)
 {
 	struct dlist *l;
 	struct dlist *n;
@@ -66,7 +66,7 @@ static inline void invoke_con_cb_list(int handle)
 	}
 }
 
-static inline void invoke_disconn_cb_list(int handle)
+HAPI void invoke_disconn_cb_list(int handle)
 {
 	struct dlist *l;
 	struct dlist *n;
@@ -123,16 +123,14 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	socket_fd = g_io_channel_unix_get_fd(src);
 	if (!(cond & G_IO_IN)) {
 		ErrPrint("Accept socket closed\n");
-		if (close(socket_fd) < 0)
-			ErrPrint("Close error[%d]: %s\n", socket_fd, strerror(errno));
+		secure_socket_destroy_handle(socket_fd);
 		free(cbdata);
 		return FALSE;
 	}
 
 	if ((cond & G_IO_ERR) || (cond & G_IO_HUP) || (cond & G_IO_NVAL)) {
 		DbgPrint("Client connection is lost\n");
-		if (close(socket_fd) < 0)
-			ErrPrint("Close error[%d]: %s\n", socket_fd, strerror(errno));
+		secure_socket_destroy_handle(socket_fd);
 		free(cbdata);
 		return FALSE;
 	}
@@ -216,8 +214,7 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 	if (!gio) {
 		ErrPrint("Failed to create new io channel\n");
 		free(cbdata);
-		if (close(fd) < 0)
-			ErrPrint("Close error[%d]: %s\n", fd, strerror(errno));
+		secure_socket_destroy_handle(fd);
 		return -EIO;
 	}
 
@@ -234,8 +231,7 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 			g_error_free(err);
 		}
 		g_io_channel_unref(gio);
-		if (close(fd) < 0)
-			ErrPrint("Close error[%d]: %s\n", fd, strerror(errno));
+		secure_socket_destroy_handle(fd);
 		return -EIO;
 	}
 
@@ -275,8 +271,7 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 	if (!gio) {
 		ErrPrint("Failed to create a new IO channel\n");
 		free(cbdata);
-		if (close(client_fd) < 0)
-			ErrPrint("Close error[%d]: %s\n", client_fd, strerror(errno));
+		secure_socket_destroy_handle(client_fd);
 		return -EIO;
 	}
 
@@ -293,8 +288,7 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 			g_error_free(err);
 		}
 		g_io_channel_unref(gio);
-		if (close(client_fd) < 0)
-			ErrPrint("Close error[%d]: %s\n", client_fd, strerror(errno));
+		secure_socket_destroy_handle(client_fd);
 		return -EIO;
 	}
 
@@ -348,14 +342,16 @@ EAPI int com_core_recv(int handle, char *buffer, int size, int *sender_pid, doub
 		}
 
 		if (ret < 0) {
-			/*!< Error */
 			ret = -errno;
+			if (errno == EINTR) {
+				DbgPrint("Select receives INTR\n");
+				continue;
+			}
 			ErrPrint("Error: %s\n", strerror(errno));
 			return ret;
 		} else if (ret == 0) {
-			/*!< Timeout */
 			ErrPrint("Timeout expired\n");
-			return -ETIMEDOUT;
+			break;
 		}
 
 		if (!FD_ISSET(handle, &set)) {
@@ -410,11 +406,15 @@ EAPI int com_core_send(int handle, const char *buffer, int size, double timeout)
 
 		if (ret < 0) {
 			ret = -errno;
+			if (errno == EINTR) {
+				DbgPrint("Select receives INTR\n");
+				continue;
+			}
 			ErrPrint("Error: %s\n", strerror(errno));
 			return ret;
 		} else if (ret == 0) {
 			ErrPrint("Timeout expired\n");
-			return -ETIMEDOUT;
+			break;
 		}
 
 		if (!FD_ISSET(handle, &set)) {

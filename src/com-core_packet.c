@@ -28,6 +28,7 @@
 
 #include "debug.h"
 #include "com-core.h"
+#include "com-core_thread.h"
 #include "packet.h"
 #include "secure_socket.h"
 #include "dlist.h"
@@ -40,10 +41,31 @@ static struct info {
 	struct dlist *recv_list;
 	struct dlist *request_list;
 	char *addr;
+
+	struct {
+		int (*server_create)(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data);
+		int (*client_create)(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data);
+		int (*server_destroy)(int handle);
+		int (*client_destroy)(int handle);
+
+		int (*recv)(int handle, char *buffer, int size, int *sender_pid, double timeout);
+		int (*send)(int handle, const char *buffer, int size, double timeout);
+	} vtable;
+
+	int initialized;
 } s_info = {
 	.recv_list = NULL,
 	.request_list = NULL,
 	.addr = NULL,
+	.vtable = {
+		.server_create = com_core_server_create,
+		.client_create = com_core_client_create,
+		.server_destroy = com_core_server_destroy,
+		.client_destroy = com_core_client_destroy,
+		.recv = com_core_recv,
+		.send = com_core_send,
+	},
+	.initialized = 0,
 };
 
 struct request_ctx {
@@ -182,7 +204,7 @@ static inline int packet_ready(int handle, const struct recv_ctx *receive, struc
 
 			result = table[i].handler(receive->pid, handle, receive->packet);
 			if (result) {
-				ret = com_core_send(handle, (void *)packet_data(result), packet_size(result), DEFAULT_TIMEOUT);
+				ret = s_info.vtable.send(handle, (void *)packet_data(result), packet_size(result), DEFAULT_TIMEOUT);
 				if (ret < 0) {
 					ErrPrint("Failed to send an ack packet\n");
 				} else {
@@ -276,7 +298,7 @@ static int service_cb(int handle, void *data)
 			return -ENOMEM;
 		}
 
-		ret = com_core_recv(handle, ptr, size, &pid, receive->timeout);
+		ret = s_info.vtable.recv(handle, ptr, size, &pid, receive->timeout);
 		if (ret < 0) {
 			ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
 			free(ptr);
@@ -327,7 +349,7 @@ static int service_cb(int handle, void *data)
 			return -ENOMEM;
 		}
 
-		ret = com_core_recv(handle, ptr, size, &pid, receive->timeout);
+		ret = s_info.vtable.recv(handle, ptr, size, &pid, receive->timeout);
 		if (ret < 0) {
 			ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
 			free(ptr);
@@ -349,8 +371,9 @@ static int service_cb(int handle, void *data)
 
 			receive->offset += ret;
 
-			if (receive->offset == packet_size(receive->packet))
+			if (receive->offset == packet_size(receive->packet)) {
 				receive->state = RECV_STATE_READY;
+			}
 		} else {
 			DbgPrint("ZERO bytes receives(%d)\n", pid);
 			free(ptr);
@@ -395,7 +418,7 @@ EAPI int com_core_packet_async_send(int handle, struct packet *packet, double ti
 	ctx->data = data;
 	ctx->packet = packet_ref(packet);
 
-	ret = com_core_send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+	ret = s_info.vtable.send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
 	if (ret != packet_size(packet)) {
 		ErrPrint("Send failed. %d <> %d (handle: %d)\n", ret, packet_size(packet), handle);
 		destroy_request_ctx(ctx);
@@ -414,7 +437,7 @@ EAPI int com_core_packet_send_only(int handle, struct packet *packet)
 		return -EINVAL;
 	}
 
-	ret = com_core_send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+	ret = s_info.vtable.send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
 	if (ret != packet_size(packet)) {
 		ErrPrint("Failed to send whole packet\n");
 		return -EIO;
@@ -516,11 +539,21 @@ out:
 
 static inline int com_core_packet_init(void)
 {
-	return com_core_add_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
+	int ret;
+	if (s_info.initialized)
+		return 0;
+
+	ret = com_core_add_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
+	s_info.initialized = (ret == 0);
+	return ret;
 }
 
 static inline int com_core_packet_fini(void)
 {
+	if (!s_info.initialized)
+		return 0;
+
+	s_info.initialized = 0;
 	com_core_del_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
 	return 0;
 }
@@ -533,7 +566,7 @@ EAPI int com_core_packet_client_init(const char *addr, int is_sync, struct metho
 	if (ret < 0)
 		return ret;
 
-	ret = com_core_client_create(addr, 0, service_cb, table);
+	ret = s_info.vtable.client_create(addr, is_sync, service_cb, table);
 	if (ret < 0)
 		com_core_packet_fini();
 
@@ -542,7 +575,7 @@ EAPI int com_core_packet_client_init(const char *addr, int is_sync, struct metho
 
 EAPI int com_core_packet_client_fini(int handle)
 {
-	com_core_client_destroy(handle);
+	s_info.vtable.client_destroy(handle);
 	com_core_packet_fini();
 	return 0;
 }
@@ -555,7 +588,7 @@ EAPI int com_core_packet_server_init(const char *addr, struct method *table)
 	if (ret < 0)
 		return ret;
 
-	ret = com_core_server_create(addr, 0, service_cb, table);
+	ret = s_info.vtable.server_create(addr, 0, service_cb, table);
 	if (ret < 0)
 		com_core_packet_fini();
 
@@ -564,9 +597,28 @@ EAPI int com_core_packet_server_init(const char *addr, struct method *table)
 
 EAPI int com_core_packet_server_fini(int handle)
 {
-	com_core_server_destroy(handle);
+	s_info.vtable.server_destroy(handle);
 	com_core_packet_fini();
 	return 0;
+}
+
+EAPI void com_core_packet_use_thread(int flag)
+{
+	if (!!flag) {
+		s_info.vtable.server_create = com_core_thread_server_create;
+		s_info.vtable.client_create = com_core_thread_client_create;
+		s_info.vtable.server_destroy = com_core_thread_server_destroy;
+		s_info.vtable.client_destroy = com_core_thread_client_destroy;
+		s_info.vtable.recv = com_core_thread_recv;
+		s_info.vtable.send = com_core_thread_send;
+	} else {
+		s_info.vtable.server_create = com_core_server_create;
+		s_info.vtable.client_create = com_core_client_create;
+		s_info.vtable.server_destroy = com_core_server_destroy;
+		s_info.vtable.client_destroy = com_core_client_destroy;
+		s_info.vtable.recv = com_core_recv;
+		s_info.vtable.send = com_core_send;
+	}
 }
 
 /* End of a file */
