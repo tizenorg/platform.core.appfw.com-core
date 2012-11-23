@@ -28,8 +28,10 @@ int errno;
 
 static struct {
 	struct dlist *tcb_list;
+	struct dlist *server_list;
 } s_info = {
 	.tcb_list = NULL,
+	.server_list = NULL,
 };
 
 /*!
@@ -40,6 +42,7 @@ struct server {
 	void *data;
 
 	guint id;
+	int handle;
 };
 
 /*!
@@ -70,6 +73,45 @@ struct tcb {
 
 	int terminated;
 };
+
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
+static inline void server_destroy(struct server *server)
+{
+	dlist_remove_data(s_info.server_list, server);
+
+	if (server->id >= 0)
+		g_source_remove(server->id);
+
+	if (server->handle > 0)
+		secure_socket_destroy_handle(server->handle);
+
+	free(server);
+}
+
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
+static inline struct server *server_create(int handle, int (*service_cb)(int fd, void *data), void *data)
+{
+	struct server *server;
+
+	server = malloc(sizeof(*server));
+	if (!server) {
+		ErrPrint("Heap: %s\n", strerror(errno));
+		return NULL;
+	}
+
+	server->handle = handle;
+	server->service_cb = service_cb;
+	server->data = data;
+
+	s_info.server_list = dlist_append(s_info.server_list, server);
+	return server;
+}
 
 /*!
  * \NOTE
@@ -452,24 +494,18 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	int ret;
 	struct tcb *tcb;
 	GIOChannel *gio;
-	struct server *cbdata = data;
+	struct server *server = data;
 
 	socket_fd = g_io_channel_unix_get_fd(src);
 	if (!(cond & G_IO_IN)) {
 		ErrPrint("Accept socket closed\n");
-		if (cbdata->id > 0)
-			g_source_remove(cbdata->id);
-		secure_socket_destroy_handle(socket_fd);
-		free(cbdata);
+		server_destroy(server);
 		return FALSE;
 	}
 
 	if ((cond & G_IO_ERR) || (cond & G_IO_HUP) || (cond & G_IO_NVAL)) {
 		DbgPrint("Socket connection is lost\n");
-		if (cbdata->id > 0)
-			g_source_remove(cbdata->id);
-		secure_socket_destroy_handle(socket_fd);
-		free(cbdata);
+		server_destroy(server);
 		return FALSE;
 	}
 
@@ -477,10 +513,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	fd = secure_socket_get_connection_handle(socket_fd);
 	if (fd < 0) {
 		ErrPrint("Failed to get client fd from socket\n");
-		if (cbdata->id > 0)
-			g_source_remove(cbdata->id);
-		secure_socket_destroy_handle(socket_fd);
-		free(cbdata);
+		server_destroy(server);
 		return FALSE;
 	}
 
@@ -491,15 +524,11 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 		ErrPrint("Error: %s\n", strerror(errno));
 
-	tcb = tcb_create(fd, 0, cbdata->service_cb, cbdata->data);
+	tcb = tcb_create(fd, 0, server->service_cb, server->data);
 	if (!tcb) {
 		ErrPrint("Failed to create a TCB\n");
 		secure_socket_destroy_handle(fd);
-
-		if (cbdata->id > 0)
-			g_source_remove(cbdata->id);
-		secure_socket_destroy_handle(socket_fd);
-		free(cbdata);
+		server_destroy(server);
 		return FALSE;
 	}
 
@@ -511,16 +540,11 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	if (!gio) {
 		ErrPrint("Failed to get gio\n");
 		tcb_destroy(tcb);
-
-		if (cbdata->id > 0)
-			g_source_remove(cbdata->id);
-		secure_socket_destroy_handle(socket_fd);
-		free(cbdata);
+		server_destroy(server);
 		return FALSE;
 	}
 
 	g_io_channel_set_close_on_unref(gio, FALSE);
-
 	tcb->id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)evt_pipe_cb, tcb);
 	if (tcb->id <= 0) {
 		GError *err = NULL;
@@ -532,14 +556,9 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		}
 		g_io_channel_unref(gio);
 		tcb_destroy(tcb);
-
-		if (cbdata->id > 0)
-			g_source_remove(cbdata->id);
-		secure_socket_destroy_handle(socket_fd);
-		free(cbdata);
+		server_destroy(server);
 		return FALSE;
 	}
-
 	g_io_channel_unref(gio);
 
 	DbgPrint("New client is connected with %d\n", tcb->handle);
@@ -550,11 +569,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
 		invoke_disconn_cb_list(tcb->handle);
 		tcb_destroy(tcb);
-
-		if (cbdata->id > 0)
-			g_source_remove(cbdata->id);
-		secure_socket_destroy_handle(socket_fd);
-		free(cbdata);
+		server_destroy(server);
 		return FALSE;
 	}
 
@@ -640,22 +655,11 @@ EAPI int com_core_thread_server_create(const char *addr, int is_sync, int (*serv
 {
 	GIOChannel *gio;
 	int fd;
-	struct server *cbdata;
-
-	cbdata = malloc(sizeof(*cbdata));
-	if (!cbdata) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		return -ENOMEM;
-	}
-
-	cbdata->service_cb = service_cb;
-	cbdata->data = data;
+	struct server *server;
 
 	fd = secure_socket_create_server(addr);
-	if (fd < 0) {
-		free(cbdata);
+	if (fd < 0)
 		return fd;
-	}
 
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("fcntl: %s\n", strerror(errno));
@@ -663,19 +667,24 @@ EAPI int com_core_thread_server_create(const char *addr, int is_sync, int (*serv
 	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 		ErrPrint("fcntl: %s\n", strerror(errno));
 
+	server = server_create(fd, service_cb, data);
+	if (!server) {
+		secure_socket_destroy_handle(fd);
+		return -ENOMEM;
+	}
+
 	DbgPrint("Create new IO channel for socket FD: %d\n", fd);
-	gio = g_io_channel_unix_new(fd);
+	gio = g_io_channel_unix_new(server->handle);
 	if (!gio) {
 		ErrPrint("Failed to create new io channel\n");
-		secure_socket_destroy_handle(fd);
-		free(cbdata);
+		server_destroy(server);
 		return -EIO;
 	}
 
 	g_io_channel_set_close_on_unref(gio, FALSE);
 
-	cbdata->id = g_io_add_watch(gio, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, (GIOFunc)accept_cb, cbdata);
-	if (cbdata->id <= 0) {
+	server->id = g_io_add_watch(gio, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, (GIOFunc)accept_cb, server);
+	if (server->id <= 0) {
 		GError *err = NULL;
 		ErrPrint("Failed to add IO watch\n");
 		g_io_channel_shutdown(gio, TRUE, &err);
@@ -684,13 +693,12 @@ EAPI int com_core_thread_server_create(const char *addr, int is_sync, int (*serv
 			g_error_free(err);
 		}
 		g_io_channel_unref(gio);
-		secure_socket_destroy_handle(fd);
-		free(cbdata);
+		server_destroy(server);
 		return -EIO;
 	}
 
 	g_io_channel_unref(gio);
-	return fd;
+	return server->handle;
 }
 
 /*!
@@ -866,6 +874,7 @@ EAPI int com_core_thread_server_destroy(int handle)
 	struct dlist *l;
 	struct dlist *n;
 	struct tcb *tcb;
+	struct server *server;
 
 	dlist_foreach_safe(s_info.tcb_list, l, n, tcb) {
 		if (tcb->server_handle != handle)
@@ -875,7 +884,13 @@ EAPI int com_core_thread_server_destroy(int handle)
 		tcb_destroy(tcb);
 	}
 
-	secure_socket_destroy_handle(handle);
+	dlist_foreach_safe(s_info.server_list, l, n, server) {
+		if (server->handle == handle) {
+			server_destroy(server);
+			break;
+		}
+	}
+
 	return 0;
 }
 
