@@ -82,7 +82,7 @@ static inline void server_destroy(struct server *server)
 {
 	dlist_remove_data(s_info.server_list, server);
 
-	if (server->id >= 0)
+	if (server->id > 0)
 		g_source_remove(server->id);
 
 	if (server->handle > 0)
