@@ -1,7 +1,6 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
-#include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -130,12 +129,15 @@ static inline void destroy_chunk(struct chunk *chunk)
 static inline void terminate_thread(struct tcb *tcb)
 {
 	void *res;
+	int status;
 
-	if (pthread_cancel(tcb->thid) < 0)
-		ErrPrint("Failed to cancel the thread\n");
+	status = pthread_cancel(tcb->thid);
+	if (status != 0)
+		ErrPrint("Failed to cancel the thread: %s\n", strerror(status));
 
-	if (pthread_join(tcb->thid, &res) < 0)
-		ErrPrint("Join: %s\n", strerror(errno));
+	status = pthread_join(tcb->thid, &res);
+	if (status != 0)
+		ErrPrint("Join: %s\n", strerror(status));
 
 	if (res == PTHREAD_CANCELED) {
 		struct dlist *l;
@@ -159,6 +161,7 @@ static inline void terminate_thread(struct tcb *tcb)
 static inline void chunk_remove(struct tcb *tcb, struct chunk *chunk)
 {
 	char event_ch;
+	int status;
 
 	/* Consuming the event */
 	if (read(tcb->evt_pipe[PIPE_READ], &event_ch, sizeof(event_ch)) != sizeof(event_ch)) {
@@ -166,13 +169,15 @@ static inline void chunk_remove(struct tcb *tcb, struct chunk *chunk)
 		return;
 	}
 
-	if (pthread_mutex_lock(&tcb->chunk_lock) < 0)
-		ErrPrint("Lock: %s\n", strerror(errno));
+	status = pthread_mutex_lock(&tcb->chunk_lock);
+	if (status != 0)
+		ErrPrint("Lock: %s\n", strerror(status));
 
 	dlist_remove_data(tcb->chunk_list, chunk);
 
-	if (pthread_mutex_unlock(&tcb->chunk_lock) < 0)
-		ErrPrint("Unlock: %s\n", strerror(errno));
+	status = pthread_mutex_unlock(&tcb->chunk_lock);
+	if (status != 0)
+		ErrPrint("Unlock: %s\n", strerror(status));
 
 	destroy_chunk(chunk);
 }
@@ -185,14 +190,17 @@ static inline void chunk_append(struct tcb *tcb, struct chunk *chunk)
 {
 	char event_ch = EVENT_READY;
 	int ret;
+	int status;
 
-	if (pthread_mutex_lock(&tcb->chunk_lock) < 0)
-		ErrPrint("Lcok: %s\n", strerror(errno));
+	status = pthread_mutex_lock(&tcb->chunk_lock);
+	if (status != 0)
+		ErrPrint("Lcok: %s\n", strerror(status));
 
 	tcb->chunk_list = dlist_append(tcb->chunk_list, chunk);
 
-	if (pthread_mutex_unlock(&tcb->chunk_lock) < 0)
-		ErrPrint("Unlock: %s\n", strerror(errno));
+	status = pthread_mutex_unlock(&tcb->chunk_lock);
+	if (status != 0)
+		ErrPrint("Unlock: %s\n", strerror(status));
 
 	ret = write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch));
 	if (ret < 0) {
@@ -293,6 +301,7 @@ static void *client_cb(void *data)
 	fd_set set;
 	int readsize;
 	char event_ch;
+	int status;
 
 	DbgPrint("Thread is created for %d (server: %d)\n", tcb->handle, tcb->server_handle);
 	/*!
@@ -303,26 +312,37 @@ static void *client_cb(void *data)
 		FD_ZERO(&set);
 		FD_SET(tcb->handle, &set);
 
-		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+		status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+		if (status != 0)
+			ErrPrint("Error: %s\n", strerror(status));
+
 		ret = select(tcb->handle + 1, &set, NULL, NULL, NULL);
 		if (ret < 0) {
 			ret = -errno;
 			if (errno == EINTR) {
 				DbgPrint("Select receives INTR\n");
-				pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+				status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+				if (status != 0)
+					ErrPrint("Error: %s\n", strerror(status));
 				continue;
 			}
 
 			/*!< Error */
 			ErrPrint("Error: %s\n", strerror(errno));
-			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+			status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+			if (status != 0)
+				ErrPrint("Error: %s\n", strerror(status));
 			break;
 		} else if (ret == 0) {
 			ErrPrint("What happens? [%d]\n", tcb->handle);
-			pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+			status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+			if (status != 0)
+				ErrPrint("Error: %s\n", strerror(status));
 			continue;
 		}
-		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+		status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+		if (status != 0)
+			ErrPrint("Error: %s\n", strerror(status));
 
 		if (!FD_ISSET(tcb->handle, &set)) {
 			ErrPrint("Unexpected handle is toggled\n");
@@ -385,6 +405,8 @@ static void *client_cb(void *data)
  */
 static inline void tcb_destroy(struct tcb *tcb)
 {
+	int status;
+
 	dlist_remove_data(s_info.tcb_list, tcb);
 
 	if (tcb->id > 0)
@@ -398,8 +420,9 @@ static inline void tcb_destroy(struct tcb *tcb)
 	if (tcb->evt_pipe[PIPE_READ] > 0)
 		close(tcb->evt_pipe[PIPE_READ]);
 
-	if (pthread_mutex_destroy(&tcb->chunk_lock) < 0)
-		ErrPrint("Failed to destroy mutex: %s\n", strerror(errno));
+	status = pthread_mutex_destroy(&tcb->chunk_lock);
+	if (status != 0)
+		ErrPrint("Failed to destroy mutex: %s\n", strerror(status));
 
 	free(tcb);
 }
@@ -453,6 +476,7 @@ errout:
 static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_cb)(int fd, void *data), void *data)
 {
 	struct tcb *tcb;
+	int status;
 
 	tcb = malloc(sizeof(*tcb));
 	if (!tcb) {
@@ -467,14 +491,18 @@ static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_c
 	tcb->id = 0;
 	tcb->terminated = 0;
 
-	if (pthread_mutex_init(&tcb->chunk_lock, NULL) < 0) {
+	status = pthread_mutex_init(&tcb->chunk_lock, NULL);
+	if (status != 0) {
+		ErrPrint("Error: %s\n", strerror(status));
 		free(tcb);
 		return NULL;
 	}
 
 	if (pipe2(tcb->evt_pipe, (is_sync ? 0 : O_NONBLOCK) | O_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
-		pthread_mutex_destroy(&tcb->chunk_lock);
+		status = pthread_mutex_destroy(&tcb->chunk_lock);
+		if (status != 0)
+			ErrPrint("Error: %s\n", strerror(status));
 		free(tcb);
 		return NULL;
 	}
