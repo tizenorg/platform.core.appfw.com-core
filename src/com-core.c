@@ -60,8 +60,10 @@ HAPI void invoke_con_cb_list(int handle)
 
 	dlist_foreach_safe(s_info.conn_cb_list, l, n, cbdata) {
 		if (cbdata->evt_cb(handle, cbdata->data) < 0) {
-			s_info.conn_cb_list = dlist_remove(s_info.conn_cb_list, l);
-			free(cbdata);
+			if (dlist_find_data(s_info.conn_cb_list, cbdata)) {
+				s_info.conn_cb_list = dlist_remove(s_info.conn_cb_list, l);
+				free(cbdata);
+			}
 		}
 	}
 }
@@ -74,8 +76,10 @@ HAPI void invoke_disconn_cb_list(int handle)
 
 	dlist_foreach_safe(s_info.disconn_cb_list, l, n, cbdata) {
 		if (cbdata->evt_cb(handle, cbdata->data) < 0) {
-			s_info.disconn_cb_list = dlist_remove(s_info.disconn_cb_list, l);
-			free(cbdata);
+			if (dlist_find_data(s_info.disconn_cb_list, cbdata)) {
+				s_info.disconn_cb_list = dlist_remove(s_info.disconn_cb_list, l);
+				free(cbdata);
+			}
 		}
 	}
 }
