@@ -128,7 +128,7 @@ static inline void destroy_chunk(struct chunk *chunk)
  */
 static inline void terminate_thread(struct tcb *tcb)
 {
-	void *res;
+	void *res = NULL;
 	int status;
 
 	status = pthread_cancel(tcb->thid);
@@ -574,7 +574,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 
 	g_io_channel_set_close_on_unref(gio, FALSE);
 	tcb->id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)evt_pipe_cb, tcb);
-	if (tcb->id <= 0) {
+	if (tcb->id == 0) {
 		GError *err = NULL;
 		ErrPrint("Failed to add IO Watch\n");
 		g_io_channel_shutdown(gio, TRUE, &err);
@@ -593,7 +593,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	invoke_con_cb_list(tcb->handle);
 
 	ret = pthread_create(&tcb->thid, NULL, client_cb, tcb);
-	if (ret < 0) {
+	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
 		invoke_disconn_cb_list(tcb->handle);
 		tcb_destroy(tcb);
@@ -646,7 +646,7 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 	g_io_channel_set_close_on_unref(gio, FALSE);
 
 	tcb->id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)evt_pipe_cb, tcb);
-	if (tcb->id <= 0) {
+	if (tcb->id == 0) {
 		GError *err = NULL;
 		ErrPrint("Failed to add IO Watch\n");
 		g_io_channel_shutdown(gio, TRUE, &err);
@@ -665,7 +665,7 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 	invoke_con_cb_list(tcb->handle);
 
 	ret = pthread_create(&tcb->thid, NULL, client_cb, tcb);
-	if (ret < 0) {
+	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
 		invoke_disconn_cb_list(tcb->handle);
 		tcb_destroy(tcb);
@@ -712,7 +712,7 @@ EAPI int com_core_thread_server_create(const char *addr, int is_sync, int (*serv
 	g_io_channel_set_close_on_unref(gio, FALSE);
 
 	server->id = g_io_add_watch(gio, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, (GIOFunc)accept_cb, server);
-	if (server->id <= 0) {
+	if (server->id == 0) {
 		GError *err = NULL;
 		ErrPrint("Failed to add IO watch\n");
 		g_io_channel_shutdown(gio, TRUE, &err);

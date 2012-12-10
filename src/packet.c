@@ -35,6 +35,7 @@ struct data {
 		int payload_size;
 		char command[PACKET_MAX_CMD];
 		enum packet_type type;
+		enum packet_flag flag;
 		double seq;
 	} head;
 
@@ -56,6 +57,14 @@ EAPI const enum packet_type const packet_type(const struct packet *packet)
 		return PACKET_ERROR;
 
 	return packet->data->head.type;
+}
+
+EAPI const enum packet_flag const packet_flag(const struct packet *packet)
+{
+	if (!packet || packet->state != VALID || !packet->data)
+		return PACKET_FLAG_ERROR;
+
+	return packet->data->head.flag;
 }
 
 EAPI const int const packet_version(const struct packet *packet)

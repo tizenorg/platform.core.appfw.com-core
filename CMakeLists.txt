@@ -38,6 +38,7 @@ ADD_LIBRARY(${PROJECT_NAME} SHARED
 	src/com-core_packet.c
 	src/secure_socket.c
 	src/com-core_thread.c
+	src/com-core_packet-router.c
 )
 SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES SOVERSION ${VERSION_MAJOR})
 SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES VERSION ${VERSION})

@@ -30,6 +30,13 @@ enum packet_type {
 	PACKET_ERROR,
 };
 
+enum packet_flag {
+	PACKET_FLAG_NOROUTE = 0x00, /*!< If possible, route this packet without care of the server */
+	PACKET_FLAG_ROUTE = 0x01, /*!< This packet must has to be cared by the server */
+
+	PACKET_FLAG_ERROR = 0xFF, /*!< Invalid flag */
+};
+
 #define PACKET_VERSION	1
 #define PACKET_MAX_CMD	24
 
@@ -44,6 +51,7 @@ extern struct packet *packet_unref(struct packet *packet);
 extern const void * const packet_data(const struct packet *packet);
 extern const double const packet_seq(const struct packet *packet);
 extern const enum packet_type const packet_type(const struct packet *packet);
+extern const enum packet_flag const packet_flag(const struct packet *packet);
 extern const int const packet_version(const struct packet *packet);
 extern const int const packet_payload_size(const struct packet *packet);
 extern const char * const packet_command(const const struct packet *packet);
