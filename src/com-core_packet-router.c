@@ -122,6 +122,10 @@ static struct info {
 static inline struct packet *get_packet(struct router *router, int *handle, pid_t *pid);
 static inline int put_packet(struct router *router, int handle, struct packet *packet, pid_t pid);
 
+/*!
+ * \note
+ * Running thread: Main
+ */
 static inline int invoke_disconnected_cb(struct router *router, int handle)
 {
 	struct dlist *l;
@@ -140,6 +144,10 @@ static inline int invoke_disconnected_cb(struct router *router, int handle)
 	return 0;
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 static inline int invoke_connected_cb(struct router *router, int handle)
 {
 	struct dlist *l;
@@ -158,6 +166,10 @@ static inline int invoke_connected_cb(struct router *router, int handle)
 	return 0;
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 static inline int invoke_error_cb(struct router *router, int handle)
 {
 	struct dlist *l;
@@ -176,6 +188,10 @@ static inline int invoke_error_cb(struct router *router, int handle)
 	return 0;
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 static inline struct request_ctx *find_request_ctx(int handle, double seq)
 {
 	struct request_ctx *ctx;
@@ -190,6 +206,10 @@ static inline struct request_ctx *find_request_ctx(int handle, double seq)
 	return NULL;
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 static inline void destroy_request_ctx(struct request_ctx *ctx)
 {
 	packet_unref(ctx->packet);
@@ -197,6 +217,10 @@ static inline void destroy_request_ctx(struct request_ctx *ctx)
 	free(ctx);
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 static inline void clear_request_ctx(int handle)
 {
 	struct request_ctx *ctx;
@@ -214,6 +238,10 @@ static inline void clear_request_ctx(int handle)
 	}
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 static inline struct request_ctx *create_request_ctx(int handle)
 {
 	struct request_ctx *ctx;
@@ -262,7 +290,7 @@ static gboolean packet_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	struct packet *result_packet;
 	struct request_ctx *request;
 	int evt_handle;
-	int handle;
+	int handle = -1;
 	pid_t pid = (pid_t)-1;
 
 	evt_handle = g_io_channel_unix_get_fd(src);
@@ -346,14 +374,38 @@ static gboolean packet_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	return TRUE;
 
 errout:
+	router->service(handle, pid, NULL, router->data);
 	return FALSE;
+}
+
+static struct packet *service_handler(int handle, pid_t pid, const struct packet *packet, void *data)
+{
+	struct method *table = data;
+	struct packet *result;
+	register int i;
+
+	if (!packet) {
+		DbgPrint("Connection is lost [%d] [%d]\n", handle, pid);
+		return NULL;
+	}
+
+	result = NULL;
+	for (i = 0; table[i].cmd; i++) {
+		if (strcmp(table[i].cmd, packet_command(packet)))
+			continue;
+
+		result = table[i].handler(pid, handle, packet);
+		break;
+	}
+
+	return result;
 }
 
 /*!
  * \NOTE
  * Running thread: Main
  */
-static struct router *create_router(const char *sock, int handle)
+static struct router *create_router(const char *sock, int handle, struct method *table)
 {
 	struct router *router;
 	GIOChannel *gio;
@@ -414,6 +466,8 @@ static struct router *create_router(const char *sock, int handle)
 	}
 
 	router->handle = handle;
+	router->service = service_handler;
+	router->data = table;
 
 	gio = g_io_channel_unix_new(router->evt_pipe[PIPE_READ]);
 	if (!gio) {
@@ -922,7 +976,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
  * \NOTE
  * Running thread: Main
  */
-EAPI int com_core_packet_router_server_create(const char *sock, double timeout, struct packet *(*service)(int handle, pid_t pid, const struct packet *packet, void *data), void *data)
+EAPI int com_core_packet_router_server_create(const char *sock, double timeout, struct method *table)
 {
 	int handle;
 	struct router *router;
@@ -932,15 +986,13 @@ EAPI int com_core_packet_router_server_create(const char *sock, double timeout, 
 	if (handle < 0)
 		return handle;
 
-	router = create_router(sock, handle);
+	router = create_router(sock, handle, table);
 	if (!router) {
 		secure_socket_destroy_handle(handle);
 		return -ENOMEM;
 	}
 
 	router->timeout = timeout;
-	router->service = service;
-	router->data = data;
 	router->is_server = 1;
 
 	gio = g_io_channel_unix_new(router->handle);
@@ -975,7 +1027,7 @@ EAPI int com_core_packet_router_server_create(const char *sock, double timeout, 
  * \NOTE
  * Running thread: Main
  */
-EAPI int com_core_packet_router_client_create(const char *sock, double timeout, struct packet *(*service)(int handle, pid_t pid, const struct packet *packet, void *data), void *data)
+EAPI int com_core_packet_router_client_create(const char *sock, double timeout, struct method *table)
 {
 	struct router *router;
 	int handle;
@@ -985,15 +1037,13 @@ EAPI int com_core_packet_router_client_create(const char *sock, double timeout, 
 	if (handle < 0)
 		return handle;
 
-	router = create_router(sock, handle);
+	router = create_router(sock, handle, table);
 	if (!router) {
 		secure_socket_destroy_handle(handle);
 		return -ENOMEM;
 	}
 
 	router->timeout = timeout;
-	router->service = service;
-	router->data = data;
 	router->is_server = 0;
 
 	status = pthread_mutex_init(&router->packet_list_lock, NULL);
@@ -1025,6 +1075,10 @@ EAPI int com_core_packet_router_client_create(const char *sock, double timeout, 
 	return router->handle;
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 EAPI void *com_core_packet_router_destroy(int handle)
 {
 	struct router *router;
@@ -1096,6 +1150,10 @@ EAPI void *com_core_packet_router_destroy(int handle)
 	return data;
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 EAPI int com_core_packet_router_async_send(int handle, struct packet *packet, double timeout, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data)
 {
 	int ret;
@@ -1124,11 +1182,19 @@ EAPI int com_core_packet_router_async_send(int handle, struct packet *packet, do
 	return 0;
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 EAPI int com_core_packet_router_send_only(int handle, struct packet *packet)
 {
 	return com_core_packet_send_only(handle, packet);
 }
 
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
 EAPI struct packet *com_core_packet_router_oneshot_send(const char *addr, struct packet *packet, double timeout)
 {
 	return com_core_packet_oneshot_send(addr, packet, timeout);

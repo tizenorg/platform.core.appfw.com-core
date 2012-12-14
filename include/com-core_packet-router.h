@@ -18,8 +18,8 @@ extern int com_core_packet_router_del_link_by_to(int handle, int to);
 extern int com_core_packet_router_add_event_callback(enum com_core_route_event_type type, int (*evt_cb)(int handle, void *data), void *data);
 extern int com_core_packet_router_del_event_callback(enum com_core_route_event_type type, int (*evt_cb)(int handle, void *data), void *data);
 
-extern int com_core_packet_router_server_create(const char *sock, double timeout, struct packet *(*service)(int handle, pid_t pid, const struct packet *packet, void *data), void *data);
-extern int com_core_packet_router_client_create(const char *sock, double timeout, struct packet *(*service)(int handle, pid_t pid, const struct packet *packet, void *data), void *data);
+extern int com_core_packet_router_server_create(const char *sock, double timeout, struct method *table);
+extern int com_core_packet_router_client_create(const char *sock, double timeout, struct method *table);
 extern void *com_core_packet_router_destroy(int handle);
 
 extern int com_core_packet_router_async_send(int handle, struct packet *packet, double timeout, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data);
