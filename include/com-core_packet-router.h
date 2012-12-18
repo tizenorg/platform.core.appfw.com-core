@@ -11,9 +11,9 @@ enum com_core_route_event_type {
 	COM_CORE_ROUTE_ERROR,
 };
 
-extern int com_core_packet_router_add_link(int handle, int from, int to);
-extern int com_core_packet_router_del_link_by_from(int handle, int from);
-extern int com_core_packet_router_del_link_by_to(int handle, int to);
+extern int com_core_packet_router_add_route(int handle, unsigned long address, int to);
+extern int com_core_packet_router_del_route(int handle, unsigned long address);
+extern int com_core_packet_router_update_route(int handle, unsigned long address, int to);
 
 extern int com_core_packet_router_add_event_callback(enum com_core_route_event_type type, int (*evt_cb)(int handle, void *data), void *data);
 extern int com_core_packet_router_del_event_callback(enum com_core_route_event_type type, int (*evt_cb)(int handle, void *data), void *data);

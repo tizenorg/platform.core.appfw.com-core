@@ -37,6 +37,9 @@ struct data {
 		enum packet_type type;
 		enum packet_flag flag;
 		double seq;
+		unsigned long source;
+		unsigned long destination;
+		unsigned long mask;
 	} head;
 
 	char payload[];
@@ -59,12 +62,72 @@ EAPI const enum packet_type const packet_type(const struct packet *packet)
 	return packet->data->head.type;
 }
 
+EAPI unsigned long packet_mask(const struct packet *packet)
+{
+	if (!packet || packet->state != VALID || !packet->data)
+		return 0;
+
+	return packet->data->head.mask;
+}
+
+EAPI int packet_set_mask(struct packet *packet, unsigned long mask)
+{
+	if (!packet || packet->state != VALID || !packet->data)
+		return -EINVAL;
+
+	packet->data->head.mask = mask;
+	return 0;
+}
+
 EAPI const enum packet_flag const packet_flag(const struct packet *packet)
 {
 	if (!packet || packet->state != VALID || !packet->data)
 		return PACKET_FLAG_ERROR;
 
 	return packet->data->head.flag;
+}
+
+EAPI int packet_set_flag(struct packet *packet, enum packet_flag flag)
+{
+	if (!packet || packet->state != VALID || !packet->data)
+		return -EINVAL;
+
+	packet->data->head.flag = flag;
+	return 0;
+}
+
+EAPI const unsigned long const packet_source(const struct packet *packet)
+{
+	if (!packet || packet->state != VALID || !packet->data)
+		return 0;
+
+	return packet->data->head.source;
+}
+
+EAPI int packet_set_source(struct packet *packet, unsigned long source)
+{
+	if (!packet || packet->state != VALID || !packet->data || !source)
+		return -EINVAL;
+
+	packet->data->head.source = source;
+	return 0;
+}
+
+EAPI const unsigned long const packet_destination(const struct packet *packet)
+{
+	if (!packet || packet->state != VALID || !packet->data)
+		return 0;
+
+	return packet->data->head.destination;
+}
+
+EAPI int packet_set_destination(struct packet *packet, unsigned long destination)
+{
+	if (!packet || packet->state != VALID || !packet->data || !destination)
+		return -EINVAL;
+
+	packet->data->head.destination = destination;
+	return 0;
 }
 
 EAPI const int const packet_version(const struct packet *packet)
@@ -245,6 +308,11 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	}
 
 	result->state = VALID;
+
+	result->data->head.source = 0lu;
+	result->data->head.destination = 0lu;
+	result->data->head.mask = 0xFFFFFFFF;
+
 	result->data->head.seq = packet->data->head.seq;
 	result->data->head.type = PACKET_ACK;
 	result->data->head.version = packet->data->head.version;
@@ -289,6 +357,9 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 
 	packet->state = VALID;
 	gettimeofday(&tv, NULL);
+	packet->data->head.source = 0lu;
+	packet->data->head.destination = 0lu;
+	packet->data->head.mask = 0xFFFFFFFF;
 	packet->data->head.seq = tv.tv_sec + tv.tv_usec / 1000000.0f;
 	packet->data->head.type = PACKET_REQ;
 	packet->data->head.version = PACKET_VERSION;
@@ -333,6 +404,9 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 
 	result->state = VALID;
 	gettimeofday(&tv, NULL);
+	result->data->head.source = 0lu;
+	result->data->head.destination = 0lu;
+	result->data->head.mask = 0xFFFFFFFF;
 	result->data->head.seq = tv.tv_sec + tv.tv_usec / 1000000.0f;
 	result->data->head.type = PACKET_REQ_NOACK;
 	result->data->head.version = PACKET_VERSION;
@@ -463,6 +537,7 @@ EAPI struct packet *packet_build(struct packet *packet, int offset, void *data, 
 
 		packet->state = VALID;
 		memcpy(packet->data, data, size);
+		packet->data->head.mask = 0xFFFFFFFF;
 		return packet;
 	}
 

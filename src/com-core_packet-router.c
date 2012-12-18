@@ -29,8 +29,9 @@ struct packet_item {
 };
 
 struct route {
-	int from;
-	int to;
+	unsigned long address;
+	int handle;
+	int invalid;
 };
 
 struct client {
@@ -131,8 +132,28 @@ static inline int invoke_disconnected_cb(struct router *router, int handle)
 	struct dlist *l;
 	struct dlist *n;
 	struct event_item *item;
+	struct route *route;
 	int ret;
 
+	/*!
+	 * Update the routing table.
+	 */
+	ret = pthread_mutex_lock(&router->route_list_lock);
+	if (ret != 0)
+		ErrPrint("Failed to lock: %s\n", strerror(ret));
+
+	dlist_foreach(router->route_list, l, route) {
+		if (route->handle == handle)
+			route->invalid = 1;
+	}
+
+	ret = pthread_mutex_unlock(&router->route_list_lock);
+	if (ret != 0)
+		ErrPrint("Failed to unlock: %s\n", strerror(ret));
+
+	/*!
+	 * Invoke the disconnected callback
+	 */
 	dlist_foreach_safe(s_info.disconnected_list, l, n, item) {
 		ret = item->evt_cb(handle, item->data);
 		if (ret < 0 && dlist_find_data(s_info.disconnected_list, item)) {
@@ -555,32 +576,59 @@ static inline int destroy_router(struct router *router)
  * \NOTE
  * Running thread: Client / Server leaf thread
  */
-static inline int route_packet(struct router *router, int from, struct packet *packet)
+static inline int route_packet(struct router *router, int handle, struct packet *packet)
 {
 	struct dlist *l;
 	struct route *route;
-	int processed;
-	int ret;
+	unsigned long destination;
+	unsigned long source;
+	unsigned long mask;
+	int status;
+	int processed = 0;
 
-	processed = 0;
-	dlist_foreach(router->route_list, l, route) {
-		if (route->from != from)
-			continue;
+	destination = packet_destination(packet);
+	source = packet_destination(packet);
+	mask = packet_mask(packet);
 
-		if (route->to < 0)
-			continue;
+	/*!
+	 * Can we believe this source?
+	 */
 
-		ret = com_core_send(route->to, (void *)packet_data(packet), packet_size(packet), router->timeout);
-		if (ret != packet_size(packet)) {
-			ErrPrint("Failed to send whole packet\n");
-			continue;
+	if (destination && source) {
+		status = pthread_mutex_lock(&router->route_list_lock);
+		if (status != 0)
+			ErrPrint("Failed to lock: %s\n", strerror(status));
+
+		dlist_foreach(router->route_list, l, route) {
+			if (!route->invalid && (route->address & mask) == (destination & mask)) {
+				int ret;
+
+				/*!
+				 * This code is executed in the CRITICAL SECTION
+				 * If possible, we have to do this from the out of the CRITICAL SECTION
+				 * 
+				 * This code can makes the system slow.
+				 *
+				 * We have to optimize the processing time in the CRITICAL SECTION
+				 */
+				ret = com_core_send(route->handle, (void *)packet_data(packet), packet_size(packet), router->timeout);
+				if (ret != packet_size(packet)) {
+					ErrPrint("Failed to send whole packet\n");
+				}
+
+				processed++;
+			}
 		}
 
-		processed++;
+		status = pthread_mutex_unlock(&router->route_list_lock);
+		if (status != 0)
+			ErrPrint("Failed to unlock: %s\n", strerror(status));
 	}
 
-	if (processed == 0)
+	if (processed == 0) {
+		DbgPrint("Drop a packet\n");
 		router->count_of_dropped_packet++;
+	}
 
 	packet_destroy(packet);
 	return 0;
@@ -1204,11 +1252,14 @@ EAPI struct packet *com_core_packet_router_oneshot_send(const char *addr, struct
  * \NOTE
  * Running thread: Main
  */
-EAPI int com_core_packet_router_add_link(int handle, int from, int to)
+EAPI int com_core_packet_router_add_route(int handle, unsigned long address, int h)
 {
 	struct router *router;
 	struct route *route;
 	int status;
+
+	if (handle < 0 || !address || h < 0)
+		return -EINVAL;
 
 	router = find_router_by_handle(handle);
 	if (!router) {
@@ -1222,8 +1273,9 @@ EAPI int com_core_packet_router_add_link(int handle, int from, int to)
 		return -ENOMEM;
 	}
 
-	route->from = from;
-	route->to = to;
+	route->address = address;
+	route->handle = h;
+	route->invalid = 0;
 
 	status = pthread_mutex_lock(&router->route_list_lock);
 	if (status != 0)
@@ -1242,13 +1294,16 @@ EAPI int com_core_packet_router_add_link(int handle, int from, int to)
  * \NOTE
  * Running thread: Main
  */
-EAPI int com_core_packet_router_del_link_by_from(int handle, int from)
+EAPI int com_core_packet_router_del_route(int handle, unsigned long address)
 {
 	struct router *router;
 	struct route *route;
 	struct dlist *l;
 	struct dlist *n;
 	int status;
+
+	if (handle < 0 || !address)
+		return -EINVAL;
 
 	router = find_router_by_handle(handle);
 	if (!router) {
@@ -1261,13 +1316,14 @@ EAPI int com_core_packet_router_del_link_by_from(int handle, int from)
 		ErrPrint("Failed to lock: %s\n", strerror(status));
 
 	dlist_foreach_safe(router->route_list, l, n, route) {
-		if (route->from != from)
+		if (route->address != address)
 			continue;
 
 		router->route_list = dlist_remove(router->route_list, l);
 
-		DbgPrint("Delete an entry from the table (%d <-> %d)\n", route->from, route->to);
+		DbgPrint("Delete an entry from the table (%lu : %d)\n", route->address, route->handle);
 		free(route);
+		break;
 	}
 
 	status = pthread_mutex_unlock(&router->route_list_lock);
@@ -1277,17 +1333,16 @@ EAPI int com_core_packet_router_del_link_by_from(int handle, int from)
 	return 0;
 }
 
-/*!
- * \NOTE
- * Running thread: Main
- */
-EAPI int com_core_packet_router_del_link_by_to(int handle, int to)
+EAPI int com_core_packet_router_update_route(int handle, unsigned long address, int h)
 {
 	struct router *router;
 	struct route *route;
 	struct dlist *l;
-	struct dlist *n;
 	int status;
+	int found = 0;
+
+	if (handle < 0 || !address || h < 0)
+		return -EINVAL;
 
 	router = find_router_by_handle(handle);
 	if (!router) {
@@ -1299,20 +1354,21 @@ EAPI int com_core_packet_router_del_link_by_to(int handle, int to)
 	if (status != 0)
 		ErrPrint("Failed to lock: %s\n", strerror(status));
 
-	dlist_foreach_safe(router->route_list, l, n, route) {
-		if (route->to != to)
+	dlist_foreach(router->route_list, l, route) {
+		if (route->address != address)
 			continue;
 
-		router->route_list = dlist_remove(router->route_list, l);
-		DbgPrint("Delete an entry from the table (%d <-> %d)\n", route->from, route->to);
-		free(route);
+		route->handle = h;
+		route->invalid = 0;
+		found = 1;
+		break;
 	}
 
 	status = pthread_mutex_unlock(&router->route_list_lock);
 	if (status != 0)
 		ErrPrint("Failed to unlock: %s\n", strerror(status));
 
-	return 0;
+	return found ? 0 : -ENOENT;
 }
 
 /*!

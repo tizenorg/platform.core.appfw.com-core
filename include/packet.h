@@ -37,7 +37,7 @@ enum packet_flag {
 	PACKET_FLAG_ERROR = 0xFF, /*!< Invalid flag */
 };
 
-#define PACKET_VERSION	1
+#define PACKET_VERSION	2
 #define PACKET_MAX_CMD	24
 
 extern struct packet *packet_create(const char *command, const char *fmt, ...);
@@ -51,7 +51,16 @@ extern struct packet *packet_unref(struct packet *packet);
 extern const void * const packet_data(const struct packet *packet);
 extern const double const packet_seq(const struct packet *packet);
 extern const enum packet_type const packet_type(const struct packet *packet);
+
 extern const enum packet_flag const packet_flag(const struct packet *packet);
+extern int packet_set_flag(struct packet *packet, enum packet_flag flag);
+extern const unsigned long const packet_source(const struct packet *packet);
+extern int packet_set_source(struct packet *packet, unsigned long source);
+extern const unsigned long const packet_destination(const struct packet *packet);
+extern int packet_set_destination(struct packet *packet, unsigned long destination);
+extern int packet_set_mask(struct packet *packet, unsigned long mask);
+extern unsigned long packet_mask(const struct packet *packet);
+
 extern const int const packet_version(const struct packet *packet);
 extern const int const packet_payload_size(const struct packet *packet);
 extern const char * const packet_command(const const struct packet *packet);
