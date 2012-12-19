@@ -405,6 +405,11 @@ EAPI int com_core_packet_async_send(int handle, struct packet *packet, double ti
 	int ret;
 	struct request_ctx *ctx;
 
+	if (handle < 0 || !packet) {
+		ErrPrint("Invalid argument\n");
+		return -EINVAL;
+	}
+
 	if (packet_type(packet) != PACKET_REQ) {
 		ErrPrint("Invalid packet - should be PACKET_REQ\n");
 		return -EINVAL;
@@ -455,6 +460,11 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	struct packet *result = NULL;
 	void *ptr;
 	int size;
+
+	if (!addr || !packet) {
+		ErrPrint("Invalid argument\n");
+		return NULL;
+	}
 
 	fd = secure_socket_create_client(addr);
 	if (fd < 0)

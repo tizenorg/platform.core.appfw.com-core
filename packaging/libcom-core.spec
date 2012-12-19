@@ -38,6 +38,7 @@ mkdir -p %{buildroot}/usr/share/license
 %manifest libcom-core.manifest
 %defattr(-,root,root,-)
 /usr/lib/*.so*
+/usr/share/license/*
 
 %files devel
 %defattr(-,root,root,-)
@@ -47,4 +48,3 @@ mkdir -p %{buildroot}/usr/share/license
 /usr/include/com-core/com-core_thread.h
 /usr/include/com-core/secure_socket.h
 /usr/lib/pkgconfig/*.pc
-/usr/share/license/*

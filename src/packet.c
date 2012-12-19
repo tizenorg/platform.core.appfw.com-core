@@ -308,9 +308,8 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	}
 
 	result->state = VALID;
-
-	result->data->head.source = 0lu;
-	result->data->head.destination = 0lu;
+	result->data->head.source = packet->data->head.destination;
+	result->data->head.destination = packet->data->head.source;
 	result->data->head.mask = 0xFFFFFFFF;
 
 	result->data->head.seq = packet->data->head.seq;
@@ -325,6 +324,20 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	va_end(va);
 
 	return packet_ref(result);
+}
+
+EAPI int packet_swap_address(struct packet *packet)
+{
+	unsigned long tmp;
+
+	if (!packet || packet->state != VALID)
+		return -EINVAL;
+
+	tmp = packet->data->head.source;
+	packet->data->head.source = packet->data->head.destination;
+	packet->data->head.destination = tmp;
+
+	return 0;
 }
 
 EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)

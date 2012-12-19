@@ -60,6 +60,7 @@ extern const unsigned long const packet_destination(const struct packet *packet)
 extern int packet_set_destination(struct packet *packet, unsigned long destination);
 extern int packet_set_mask(struct packet *packet, unsigned long mask);
 extern unsigned long packet_mask(const struct packet *packet);
+extern int packet_swap_address(struct packet *packet);
 
 extern const int const packet_version(const struct packet *packet);
 extern const int const packet_payload_size(const struct packet *packet);
