@@ -817,7 +817,7 @@ static struct router *create_router(const char *sock, int handle, struct method 
  *
  * Before call this, every thread which uses this router object must has to be terminated.
  */
-static inline int destroy_router(struct router *router)
+static inline __attribute__((always_inline)) int destroy_router(struct router *router)
 {
 	int handle;
 	int ret;
