@@ -185,7 +185,7 @@ EAPI const void * const packet_data(const struct packet *packet)
 	return packet->data;
 }
 
-static inline struct data *check_and_expand_packet(struct data *packet, int *payload_size)
+static inline __attribute__((always_inline)) struct data *check_and_expand_packet(struct data *packet, int *payload_size)
 {
 	struct data *new_packet;
 
