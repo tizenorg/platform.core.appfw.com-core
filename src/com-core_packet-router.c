@@ -160,23 +160,27 @@ static inline int invoke_disconnected_cb(struct router *router, int handle)
 	struct route *route;
 	int ret;
 
-	/*!
-	 * Update the routing table.
-	 */
-	ret = pthread_mutex_lock(&router->route_list_lock);
-	if (ret != 0)
-		ErrPrint("Failed to lock: %s\n", strerror(ret));
+	CRITICAL_SECTION_BEGIN(&router->route_list_lock);
 
 	dlist_foreach(router->route_list, l, route) {
-		if (route->handle == handle)
+		if (route->handle == handle) {
+			/*!
+			 * \NOTE
+			 * Invalidate an entry in the routing table.
+			 * Do not this entry from the routing table from here,.
+			 * Because a user may not want to delete the entry without any notification.
+			 * So we just left this invalid entry on the table.
+			 * Then the user has to manage the routing table correctly 
+			 * via connected/disconnected event callbacks.
+			 */
 			route->invalid = 1;
+		}
 	}
 
-	ret = pthread_mutex_unlock(&router->route_list_lock);
-	if (ret != 0)
-		ErrPrint("Failed to unlock: %s\n", strerror(ret));
+	CRITICAL_SECTION_END(&router->route_list_lock);
 
 	/*!
+	 * \NOTE
 	 * Invoke the disconnected callback
 	 */
 	dlist_foreach_safe(s_info.disconnected_list, l, n, item) {
@@ -877,27 +881,25 @@ static inline int route_packet(struct router *router, int handle, struct packet 
 	unsigned long destination;
 	unsigned long source;
 	unsigned long mask;
-	int status;
 	int processed = 0;
 
 	destination = packet_destination(packet);
-	source = packet_destination(packet);
+	source = packet_source(packet);
 	mask = packet_mask(packet);
 
 	/*!
+	 * \TODO
 	 * Can we believe this source?
+	 * Validate this source address if possible.
 	 */
 
 	if (destination && source) {
-		status = pthread_mutex_lock(&router->route_list_lock);
-		if (status != 0)
-			ErrPrint("Failed to lock: %s\n", strerror(status));
+		CRITICAL_SECTION_BEGIN(&router->route_list_lock);
 
 		dlist_foreach(router->route_list, l, route) {
 			if (!route->invalid && (route->address & mask) == (destination & mask)) {
-				int ret;
-
 				/*!
+				 * \NOTE
 				 * This code is executed in the CRITICAL SECTION
 				 * If possible, we have to do this from the out of the CRITICAL SECTION
 				 * 
@@ -905,17 +907,14 @@ static inline int route_packet(struct router *router, int handle, struct packet 
 				 *
 				 * We have to optimize the processing time in the CRITICAL SECTION
 				 */
-				ret = put_send_packet(router, route->handle, packet);
-				if (ret < 0)
+				if (put_send_packet(router, route->handle, packet) < 0)
 					ErrPrint("Failed to send whole packet\n");
 
 				processed++;
 			}
 		}
 
-		status = pthread_mutex_unlock(&router->route_list_lock);
-		if (status != 0)
-			ErrPrint("Failed to unlock: %s\n", strerror(status));
+		CRITICAL_SECTION_END(&router->route_list_lock);
 	}
 
 	if (processed == 0) {
@@ -927,10 +926,13 @@ static inline int route_packet(struct router *router, int handle, struct packet 
 	return 0;
 }
 
+/*!
+ * \NOTE
+ * Running Threads: Main / Client / Server
+ */
 static inline int put_send_packet(struct router *router, int handle, struct packet *packet)
 {
 	if (packet) {
-		int status;
 		struct packet_item *item;
 
 		item = malloc(sizeof(*item));
@@ -942,15 +944,11 @@ static inline int put_send_packet(struct router *router, int handle, struct pack
 		item->packet = packet;
 		item->pid = (pid_t)-1;
 
-		status = pthread_mutex_lock(&router->send_packet_list_lock);
-		if (status != 0)
-			ErrPrint("Failed to lock: %s\n", strerror(errno));
+		CRITICAL_SECTION_BEGIN(&router->send_packet_list_lock);
 
 		router->send_packet_list = dlist_append(router->send_packet_list, item);
 
-		status = pthread_mutex_unlock(&router->send_packet_list_lock);
-		if (status != 0)
-			ErrPrint("Failed to unlock: %s\n", strerror(errno));
+		CRITICAL_SECTION_END(&router->send_packet_list_lock);
 	}
 
 	/*!
@@ -973,7 +971,6 @@ static inline int put_recv_packet(struct router *router, int handle, struct pack
 	 * If a packet is NULL, the connection is terminated
 	 */
 	if (packet) {
-		int status;
 		struct packet_item *item;
 
 		item = malloc(sizeof(*item));
@@ -985,15 +982,11 @@ static inline int put_recv_packet(struct router *router, int handle, struct pack
 		item->packet = packet;
 		item->pid = pid;
 
-		status = pthread_mutex_lock(&router->recv_packet_list_lock);
-		if (status != 0)
-			ErrPrint("Failed to lock: %s\n", strerror(errno));
+		CRITICAL_SECTION_BEGIN(&router->recv_packet_list_lock);
 
 		router->recv_packet_list = dlist_append(router->recv_packet_list, item);
 
-		status = pthread_mutex_unlock(&router->recv_packet_list_lock);
-		if (status != 0)
-			ErrPrint("Failed to unlock: %s\n", strerror(errno));
+		CRITICAL_SECTION_END(&router->recv_packet_list_lock);
 	}
 
 	/*!
@@ -1012,14 +1005,11 @@ static inline int put_recv_packet(struct router *router, int handle, struct pack
  */
 static inline struct packet *get_send_packet(struct router *router, int *handle)
 {
-	int status;
 	struct packet *packet = NULL;
 	struct dlist *l;
 	struct packet_item *item;
 
-	status = pthread_mutex_lock(&router->send_packet_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to get lock: %s\n", strerror(errno));
+	CRITICAL_SECTION_BEGIN(&router->send_packet_list_lock);
 
 	l = dlist_nth(router->send_packet_list, 0);
 	if (l) {
@@ -1029,9 +1019,7 @@ static inline struct packet *get_send_packet(struct router *router, int *handle)
 		free(item);
 	}
 
-	status = pthread_mutex_unlock(&router->send_packet_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to unlock: %s\n", strerror(errno));
+	CRITICAL_SECTION_END(&router->send_packet_list_lock);
 
 	if (read(router->send_pipe[PIPE_READ], handle, sizeof(*handle)) != sizeof(*handle))
 		ErrPrint("Failed to get an event: %s\n", strerror(errno));
@@ -1045,14 +1033,11 @@ static inline struct packet *get_send_packet(struct router *router, int *handle)
  */
 static inline struct packet *get_recv_packet(struct router *router, int *handle, pid_t *pid)
 {
-	int status;
 	struct packet *packet = NULL;
 	struct dlist *l;
 	struct packet_item *item;
 
-	status = pthread_mutex_lock(&router->recv_packet_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to get lock: %s\n", strerror(errno));
+	CRITICAL_SECTION_BEGIN(&router->recv_packet_list_lock);
 
 	l = dlist_nth(router->recv_packet_list, 0);
 	if (l) {
@@ -1066,9 +1051,7 @@ static inline struct packet *get_recv_packet(struct router *router, int *handle,
 		free(item);
 	}
 
-	status = pthread_mutex_unlock(&router->recv_packet_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to unlock: %s\n", strerror(errno));
+	CRITICAL_SECTION_END(&router->recv_packet_list_lock);
 
 	/*!
 	 * \note
@@ -1327,7 +1310,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
  * \NOTE
  * Running thread: Main
  */
-EAPI int com_core_packet_router_server_create(const char *sock, double timeout, struct method *table)
+EAPI int com_core_packet_router_server_init(const char *sock, double timeout, struct method *table)
 {
 	int handle;
 	struct router *router;
@@ -1378,7 +1361,7 @@ EAPI int com_core_packet_router_server_create(const char *sock, double timeout, 
  * \NOTE
  * Running thread: Main
  */
-EAPI int com_core_packet_router_client_create(const char *sock, double timeout, struct method *table)
+EAPI int com_core_packet_router_client_init(const char *sock, double timeout, struct method *table)
 {
 	struct router *router;
 	int handle;
@@ -1426,11 +1409,7 @@ EAPI int com_core_packet_router_client_create(const char *sock, double timeout, 
 	return router->handle;
 }
 
-/*!
- * \NOTE
- * Running thread: Main
- */
-EAPI void *com_core_packet_router_destroy(int handle)
+EAPI void *com_core_packet_router_server_fini(int handle)
 {
 	struct router *router;
 	void *data;
@@ -1449,42 +1428,87 @@ EAPI void *com_core_packet_router_destroy(int handle)
 		return NULL;
 	}
 
-	if (router->is_server) {
-		if(router->info.server.accept_id > 0)
-			g_source_remove(router->info.server.accept_id);
+	if (!router->is_server) {
+		ErrPrint("Invalid object\n");
+		return NULL;
+	}
 
-		dlist_foreach_safe(router->info.server.client_list, l, n, client) {
-			router->info.server.client_list = dlist_remove(router->info.server.client_list, l);
+	if(router->info.server.accept_id > 0)
+		g_source_remove(router->info.server.accept_id);
 
-			status = pthread_cancel(client->thid);
-			if (status != 0)
-				ErrPrint("Failed to cacnel a thread: %s\n", strerror(errno));
+	dlist_foreach_safe(router->info.server.client_list, l, n, client) {
+		router->info.server.client_list = dlist_remove(router->info.server.client_list, l);
 
-			status = pthread_join(client->thid, &ret);
-			if (status != 0)
-				ErrPrint("Failed to cancel a thread: %s\n", strerror(errno));
+		status = pthread_cancel(client->thid);
+		if (status != 0)
+			ErrPrint("Failed to cacnel a thread: %s\n", strerror(errno));
 
-			if (ret == PTHREAD_CANCELED) {
-				DbgPrint("Thread is canceled\n");
-				clear_request_ctx(client->handle);
-			}
-
-			secure_socket_destroy_handle(client->handle);
-			free(client);
-		}
-	} else {
-		status = pthread_cancel(router->info.client.thid);
+		ret = NULL;
+		status = pthread_join(client->thid, &ret);
 		if (status != 0)
 			ErrPrint("Failed to cancel a thread: %s\n", strerror(errno));
 
-		status = pthread_join(router->info.client.thid, &ret);
-		if (status != 0)
-			ErrPrint("Failed to join a thread: %s\n", strerror(errno));
-
 		if (ret == PTHREAD_CANCELED) {
 			DbgPrint("Thread is canceled\n");
-			clear_request_ctx(router->handle);
+			clear_request_ctx(client->handle);
 		}
+
+		secure_socket_destroy_handle(client->handle);
+		free(client);
+	}
+
+	dlist_foreach_safe(router->route_list, l, n, route) {
+		router->route_list = dlist_remove(router->route_list, l);
+		free(route);
+	}
+
+	data = router->data;
+
+	handle = destroy_router(router);
+	secure_socket_destroy_handle(handle);
+
+	return data;
+}
+
+/*!
+ * \NOTE
+ * Running thread: Main
+ */
+EAPI void *com_core_packet_router_client_fini(int handle)
+{
+	struct router *router;
+	void *data;
+	int status;
+	struct dlist *l;
+	struct dlist *n;
+
+	struct client *client;
+	struct route *route;
+
+	void *ret = NULL;
+
+	router = find_router_by_handle(handle);
+	if (!router) {
+		ErrPrint("No such router\n");
+		return NULL;
+	}
+
+	if (router->is_server) {
+		ErrPrint("Invalid object\n");
+		return NULL;
+	}
+
+	status = pthread_cancel(router->info.client.thid);
+	if (status != 0)
+		ErrPrint("Failed to cancel a thread: %s\n", strerror(errno));
+
+	status = pthread_join(router->info.client.thid, &ret);
+	if (status != 0)
+		ErrPrint("Failed to join a thread: %s\n", strerror(errno));
+
+	if (ret == PTHREAD_CANCELED) {
+		DbgPrint("Thread is canceled\n");
+		clear_request_ctx(router->handle);
 	}
 
 	dlist_foreach_safe(router->route_list, l, n, route) {
@@ -1577,7 +1601,6 @@ EAPI int com_core_packet_router_add_route(int handle, unsigned long address, int
 	struct router *router;
 	struct route *route;
 	struct route *tmp;
-	int status;
 	struct dlist *l;
 	int found = 0;
 
@@ -1600,9 +1623,7 @@ EAPI int com_core_packet_router_add_route(int handle, unsigned long address, int
 	route->handle = h;
 	route->invalid = 0;
 
-	status = pthread_mutex_lock(&router->route_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to lock: %s\n", strerror(status));
+	CRITICAL_SECTION_BEGIN(&router->route_list_lock);
 
 	dlist_foreach(router->route_list, l, tmp) {
 		if (tmp->address == address) {
@@ -1614,9 +1635,7 @@ EAPI int com_core_packet_router_add_route(int handle, unsigned long address, int
 	if (!found)
 		router->route_list = dlist_append(router->route_list, route);
 
-	status = pthread_mutex_unlock(&router->route_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to unlock: %s\n", strerror(status));
+	CRITICAL_SECTION_END(&router->route_list_lock);
 
 	if (found) {
 		free(route);
@@ -1636,7 +1655,6 @@ EAPI int com_core_packet_router_del_route(int handle, unsigned long address)
 	struct route *route;
 	struct dlist *l;
 	struct dlist *n;
-	int status;
 	int found = 0;
 
 	if (handle < 0 || !address)
@@ -1648,9 +1666,7 @@ EAPI int com_core_packet_router_del_route(int handle, unsigned long address)
 		return -ENOENT;
 	}
 
-	status = pthread_mutex_lock(&router->route_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to lock: %s\n", strerror(status));
+	CRITICAL_SECTION_BEGIN(&router->route_list_lock);
 
 	dlist_foreach_safe(router->route_list, l, n, route) {
 		if (route->address != address)
@@ -1665,9 +1681,7 @@ EAPI int com_core_packet_router_del_route(int handle, unsigned long address)
 		break;
 	}
 
-	status = pthread_mutex_unlock(&router->route_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to unlock: %s\n", strerror(status));
+	CRITICAL_SECTION_END(&router->route_list_lock);
 
 	return found ? 0 : -ENOENT;
 }
@@ -1681,7 +1695,6 @@ EAPI int com_core_packet_router_update_route(int handle, unsigned long address, 
 	struct router *router;
 	struct route *route;
 	struct dlist *l;
-	int status;
 	int found = 0;
 
 	if (handle < 0 || !address || h < 0)
@@ -1693,9 +1706,7 @@ EAPI int com_core_packet_router_update_route(int handle, unsigned long address, 
 		return -ENOENT;
 	}
 
-	status = pthread_mutex_lock(&router->route_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to lock: %s\n", strerror(status));
+	CRITICAL_SECTION_BEGIN(&router->route_list_lock);
 
 	dlist_foreach(router->route_list, l, route) {
 		if (route->address != address)
@@ -1707,9 +1718,7 @@ EAPI int com_core_packet_router_update_route(int handle, unsigned long address, 
 		break;
 	}
 
-	status = pthread_mutex_unlock(&router->route_list_lock);
-	if (status != 0)
-		ErrPrint("Failed to unlock: %s\n", strerror(status));
+	CRITICAL_SECTION_END(&router->route_list_lock);
 
 	return found ? 0 : -ENOENT;
 }

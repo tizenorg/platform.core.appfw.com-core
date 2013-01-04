@@ -1,11 +1,11 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.3.8
+Version: 0.3.9
 Release: 1
 Group: main/util
 License: Flora License
 Source0: %{name}-%{version}.tar.gz
-BuildRequires: cmake, gettext-tools
+BuildRequires: cmake, gettext-tools, coreutils
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(glib-2.0)
 
@@ -30,21 +30,23 @@ make %{?jobs:-j%jobs}
 %install
 rm -rf %{buildroot}
 %make_install
-mkdir -p %{buildroot}/usr/share/license
+mkdir -p %{buildroot}/%{_datarootdir}/license
 
 %post
 
 %files -n libcom-core
 %manifest libcom-core.manifest
 %defattr(-,root,root,-)
-/usr/lib/*.so*
-/usr/share/license/*
+%{_libdir}/*.so*
+%{_datarootdir}/license/*
 
 %files devel
 %defattr(-,root,root,-)
-/usr/include/com-core/com-core.h
-/usr/include/com-core/packet.h
-/usr/include/com-core/com-core_packet.h
-/usr/include/com-core/com-core_thread.h
-/usr/include/com-core/secure_socket.h
-/usr/lib/pkgconfig/*.pc
+%{_includedir}/com-core/com-core.h
+%{_includedir}/com-core/packet.h
+%{_includedir}/com-core/com-core_packet.h
+%{_includedir}/com-core/com-core_thread.h
+%{_includedir}/com-core/secure_socket.h
+%{_libdir}/pkgconfig/*.pc
+
+# End of a file

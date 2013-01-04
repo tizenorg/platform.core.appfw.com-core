@@ -16,4 +16,20 @@
 
 extern const char *util_basename(const char *name);
 
+#define CRITICAL_SECTION_BEGIN(handle) \
+do { \
+	int ret; \
+	ret = pthread_mutex_lock(handle); \
+	if (ret != 0) \
+		ErrPrint("Failed to lock: %s\n", strerror(ret)); \
+} while (0)
+
+#define CRITICAL_SECTION_END(handle) \
+do { \
+	int ret; \
+	ret = pthread_mutex_unlock(handle); \
+	if (ret != 0) \
+		ErrPrint("Failed to unlock: %s\n", strerror(ret)); \
+} while (0)
+
 /* End of a file */

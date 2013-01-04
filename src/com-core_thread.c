@@ -177,7 +177,6 @@ static inline void terminate_thread(struct tcb *tcb)
 static inline void chunk_remove(struct tcb *tcb, struct chunk *chunk)
 {
 	char event_ch;
-	int status;
 
 	/* Consuming the event */
 	if (read(tcb->evt_pipe[PIPE_READ], &event_ch, sizeof(event_ch)) != sizeof(event_ch)) {
@@ -185,15 +184,11 @@ static inline void chunk_remove(struct tcb *tcb, struct chunk *chunk)
 		return;
 	}
 
-	status = pthread_mutex_lock(&tcb->chunk_lock);
-	if (status != 0)
-		ErrPrint("Lock: %s\n", strerror(status));
+	CRITICAL_SECTION_BEGIN(&tcb->chunk_lock);
 
 	dlist_remove_data(tcb->chunk_list, chunk);
 
-	status = pthread_mutex_unlock(&tcb->chunk_lock);
-	if (status != 0)
-		ErrPrint("Unlock: %s\n", strerror(status));
+	CRITICAL_SECTION_END(&tcb->chunk_lock);
 
 	destroy_chunk(chunk);
 }
@@ -206,21 +201,15 @@ static inline void chunk_append(struct tcb *tcb, struct chunk *chunk)
 {
 	char event_ch = EVENT_READY;
 	int ret;
-	int status;
 
-	status = pthread_mutex_lock(&tcb->chunk_lock);
-	if (status != 0)
-		ErrPrint("Lcok: %s\n", strerror(status));
+	CRITICAL_SECTION_BEGIN(&tcb->chunk_lock);
 
 	tcb->chunk_list = dlist_append(tcb->chunk_list, chunk);
 
-	status = pthread_mutex_unlock(&tcb->chunk_lock);
-	if (status != 0)
-		ErrPrint("Unlock: %s\n", strerror(status));
+	CRITICAL_SECTION_END(&tcb->chunk_lock);
 
 	ret = write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch));
 	if (ret < 0) {
-		ret = -errno;
 		ErrPrint("write: %s\n", strerror(errno));
 		return;
 	}
