@@ -1482,7 +1482,6 @@ EAPI void *com_core_packet_router_client_fini(int handle)
 	struct dlist *l;
 	struct dlist *n;
 
-	struct client *client;
 	struct route *route;
 
 	void *ret = NULL;
