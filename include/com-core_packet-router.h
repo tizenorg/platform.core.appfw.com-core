@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+#ifndef _COM_CORE_PACKET_ROUTER_H
+#define _COM_CORE_PACKET_ROUTER_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum com_core_route_event_type {
 	COM_CORE_ROUTE_CONNECTED,
 	COM_CORE_ROUTE_DISCONNECTED,
@@ -37,4 +44,9 @@ extern int com_core_packet_router_async_send(int handle, struct packet *packet, 
 extern int com_core_packet_router_send_only(int handle, struct packet *packet);
 extern struct packet *com_core_packet_router_oneshot_send(const char *addr, struct packet *packet, double timeout);
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif
 /* End of a file */
