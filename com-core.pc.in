@@ -1,0 +1,11 @@
+prefix=@PREFIX@
+exec_prefix=@EXEC_PREFIX@
+libdir=@LIBDIR@
+includedir=@INCLUDEDIR@
+
+Name: com-core
+Description: Light-weight IPC supporting library
+Version: @VERSION@
+Libs: -L${libdir} -lcom-core
+Cflags: -I${includedir}
+cppflags: -I${includedir}
