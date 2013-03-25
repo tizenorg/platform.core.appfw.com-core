@@ -1,8 +1,8 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.3.12
+Version: 0.3.13
 Release: 1
-Group: main/util
+Group: HomeTF/Framework
 License: Apache License
 Source0: %{name}-%{version}.tar.gz
 BuildRequires: cmake, gettext-tools, coreutils

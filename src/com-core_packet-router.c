@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000 - 2011 Samsung Electronics Co., Ltd. All rights reserved.
+ * Copyright (c) 2000 - 2013 Samsung Electronics Co., Ltd. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1447,7 +1447,7 @@ EAPI void *com_core_packet_router_server_fini(int handle)
 		ret = NULL;
 		status = pthread_join(client->thid, &ret);
 		if (status != 0)
-			ErrPrint("Failed to cancel a thread: %s\n", strerror(errno));
+			ErrPrint("Failed to join a thread: %s\n", strerror(errno));
 
 		if (ret == PTHREAD_CANCELED) {
 			DbgPrint("Thread is canceled\n");
