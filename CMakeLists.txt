@@ -55,3 +55,5 @@ INSTALL(FILES ${CMAKE_SOURCE_DIR}/include/com-core_packet.h DESTINATION include/
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/include/com-core_thread.h DESTINATION include/${PROJECT_NAME})
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/include/packet.h DESTINATION include/${PROJECT_NAME})
 INSTALL(FILES ${CMAKE_SOURCE_DIR}/LICENSE DESTINATION /usr/share/license RENAME "lib${PROJECT_NAME}")
+
+# End of a file
