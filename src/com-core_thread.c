@@ -86,8 +86,6 @@ struct tcb {
 
 	int (*service_cb)(int fd, void *data);
 	void *data;
-
-	int terminated;
 };
 
 /*!
@@ -145,29 +143,27 @@ static inline void destroy_chunk(struct chunk *chunk)
  */
 static inline void terminate_thread(struct tcb *tcb)
 {
-	void *res = NULL;
 	int status;
+	struct dlist *l;
+	struct dlist *n;
+	void *res = NULL;
+	struct chunk *chunk;
 
-	status = pthread_cancel(tcb->thid);
-	if (status != 0)
-		ErrPrint("Failed to cancel the thread: %s\n", strerror(status));
+	secure_socket_destroy_handle(tcb->handle);
 
 	status = pthread_join(tcb->thid, &res);
 	if (status != 0)
 		ErrPrint("Join: %s\n", strerror(status));
+	else
+		ErrPrint("Thread returns: %d\n", (int)res);
 
-	if (res == PTHREAD_CANCELED) {
-		struct dlist *l;
-		struct dlist *n;
-		struct chunk *chunk;
-
-		dlist_foreach_safe(tcb->chunk_list, l, n, chunk) {
-			/*!
-			 * Discarding all packets
-			 */
-			tcb->chunk_list = dlist_remove(tcb->chunk_list, l);
-			destroy_chunk(chunk);
-		}
+	dlist_foreach_safe(tcb->chunk_list, l, n, chunk) {
+		/*!
+		 * Discarding all packets
+		 */
+		DbgPrint("Discarding chunks\n");
+		tcb->chunk_list = dlist_remove(tcb->chunk_list, l);
+		destroy_chunk(chunk);
 	}
 }
 
@@ -227,9 +223,6 @@ static inline int wait_event(struct tcb *tcb, double timeout)
 {
 	fd_set set;
 	int ret;
-
-	if (tcb->terminated)
-		return -ECONNRESET;
 
 	FD_ZERO(&set);
 	FD_SET(tcb->evt_pipe[PIPE_READ], &set);
@@ -307,7 +300,6 @@ static void *client_cb(void *data)
 	fd_set set;
 	int readsize;
 	char event_ch;
-	int status;
 
 	DbgPrint("Thread is created for %d (server: %d)\n", tcb->handle, tcb->server_handle);
 	/*!
@@ -318,37 +310,20 @@ static void *client_cb(void *data)
 		FD_ZERO(&set);
 		FD_SET(tcb->handle, &set);
 
-		status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-		if (status != 0)
-			ErrPrint("Error: %s\n", strerror(status));
-
 		ret = select(tcb->handle + 1, &set, NULL, NULL, NULL);
 		if (ret < 0) {
-			ret = -errno;
 			if (errno == EINTR) {
 				DbgPrint("Select receives INTR\n");
-				status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-				if (status != 0)
-					ErrPrint("Error: %s\n", strerror(status));
 				continue;
 			}
-
+			ret = -errno;
 			/*!< Error */
 			ErrPrint("Error: %s\n", strerror(errno));
-			status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-			if (status != 0)
-				ErrPrint("Error: %s\n", strerror(status));
 			break;
 		} else if (ret == 0) {
 			ErrPrint("What happens? [%d]\n", tcb->handle);
-			status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-			if (status != 0)
-				ErrPrint("Error: %s\n", strerror(status));
 			continue;
 		}
-		status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-		if (status != 0)
-			ErrPrint("Error: %s\n", strerror(status));
 
 		if (!FD_ISSET(tcb->handle, &set)) {
 			ErrPrint("Unexpected handle is toggled\n");
@@ -396,11 +371,9 @@ static void *client_cb(void *data)
 	}
 
 	/* Wake up main thread to get disconnected event */
-	tcb->terminated = 1;
 	event_ch = EVENT_TERM;
-	if (write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch)) != sizeof(event_ch)) {
+	if (write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch)) != sizeof(event_ch))
 		ErrPrint("write: %s\n", strerror(errno));
-	}
 
 	return (void *)ret;
 }
@@ -417,8 +390,6 @@ static inline void tcb_destroy(struct tcb *tcb)
 
 	if (tcb->id > 0)
 		g_source_remove(tcb->id);
-
-	secure_socket_destroy_handle(tcb->handle);
 
 	if (tcb->evt_pipe[PIPE_WRITE] > 0)
 		close(tcb->evt_pipe[PIPE_WRITE]);
@@ -469,6 +440,7 @@ static gboolean evt_pipe_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	return TRUE;
 
 errout:
+	DbgPrint("Disconnecting\n");
 	invoke_disconn_cb_list(tcb->handle);
 	terminate_thread(tcb);
 	tcb_destroy(tcb);
@@ -495,7 +467,6 @@ static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_c
 	tcb->service_cb = service_cb;
 	tcb->data = data;
 	tcb->id = 0;
-	tcb->terminated = 0;
 
 	status = pthread_mutex_init(&tcb->chunk_lock, NULL);
 	if (status != 0) {
@@ -573,6 +544,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	gio = g_io_channel_unix_new(tcb->evt_pipe[PIPE_READ]);
 	if (!gio) {
 		ErrPrint("Failed to get gio\n");
+		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		server_destroy(server);
 		return FALSE;
@@ -589,6 +561,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 			g_error_free(err);
 		}
 		g_io_channel_unref(gio);
+		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		server_destroy(server);
 		return FALSE;
@@ -602,6 +575,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
 		invoke_disconn_cb_list(tcb->handle);
+		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		server_destroy(server);
 		return FALSE;
@@ -645,6 +619,7 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 	gio = g_io_channel_unix_new(tcb->evt_pipe[PIPE_READ]);
 	if (!gio) {
 		ErrPrint("Failed to get gio\n");
+		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		return -EIO;
 	}
@@ -661,6 +636,7 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 			g_error_free(err);
 		}
 		g_io_channel_unref(gio);
+		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		return -EIO;
 	}
@@ -674,6 +650,7 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
 		invoke_disconn_cb_list(tcb->handle);
+		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		return -EFAULT;
 	}
@@ -855,7 +832,7 @@ EAPI int com_core_thread_recv(int handle, char *buffer, int size, int *sender_pi
 		 * Pumping up the pipe data
 		 * This is the first time to use a chunk
 		 */
-		if (!chunk || chunk->offset == 0) {
+		if (!chunk) {
 			ret = wait_event(tcb, timeout);
 			if (ret == -EAGAIN) {
 				/* Log is printed from wait_event */
@@ -878,6 +855,8 @@ EAPI int com_core_thread_recv(int handle, char *buffer, int size, int *sender_pi
 					ErrPrint("Failed to get readsize: %s\n", strerror(errno));
 				} else if (event_ch == EVENT_READY) {
 					ErrPrint("Failed to get a new chunk\n");
+				} else if (event_ch == EVENT_TERM) {
+					ErrPrint("Disconnected\n");
 				}
 
 				break;
