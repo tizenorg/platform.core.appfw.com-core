@@ -351,18 +351,20 @@ static void *client_cb(void *data)
 			break;
 		}
 
-		chunk->size = secure_socket_recv(tcb->handle, chunk->data, chunk->size, &chunk->pid);
-		if (chunk->size < 0) {
-			ret = chunk->size;
+		ret = secure_socket_recv(tcb->handle, chunk->data, chunk->size, &chunk->pid);
+		if (ret <= 0) {
 			destroy_chunk(chunk);
 			if (ret == -EAGAIN) {
-				DbgPrint("Retry to get data (%d)\n", readsize);
+				DbgPrint("Retry to get data (%d)\n", chunk->size);
 				continue;
 			}
 
-			ErrPrint("Recv returns: %d\n", ret);
+			DbgPrint("Recv returns: %d (req.size: %d)\n", ret, chunk->size);
 			break;
 		}
+
+		/* Update chunk size */
+		chunk->size = ret;
 
 		/*!
 		 * Count of chunk elements are same with PIPE'd data
@@ -370,6 +372,7 @@ static void *client_cb(void *data)
 		chunk_append(tcb, chunk);
 	}
 
+	DbgPrint("Client CB is terminated (%d)\n", tcb->handle);
 	/* Wake up main thread to get disconnected event */
 	event_ch = EVENT_TERM;
 	if (write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch)) != sizeof(event_ch))
@@ -856,7 +859,7 @@ EAPI int com_core_thread_recv(int handle, char *buffer, int size, int *sender_pi
 				} else if (event_ch == EVENT_READY) {
 					ErrPrint("Failed to get a new chunk\n");
 				} else if (event_ch == EVENT_TERM) {
-					ErrPrint("Disconnected\n");
+					DbgPrint("Disconnected\n");
 				}
 
 				break;

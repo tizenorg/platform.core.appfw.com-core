@@ -370,8 +370,10 @@ EAPI int com_core_recv(int handle, char *buffer, int size, int *sender_pid, doub
 				DbgPrint("Retry to get data (%d:%d)\n", readsize, size);
 				continue;
 			}
+			DbgPrint("[%d] recv returns: %d\n", handle, ret);
 			return ret;
 		} else if (ret == 0) {
+			DbgPrint("Disconnected(req.size: %d)\n", size);
 			return 0;
 		}
 
