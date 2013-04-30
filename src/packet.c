@@ -300,7 +300,7 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 
 	payload_size = sizeof(*result->data) + BUFSIZ;
 	result->refcnt = 0;
-	result->data = malloc(payload_size);
+	result->data = calloc(1, payload_size);
 	if (!packet->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
 		result->state = INVALID;
@@ -361,7 +361,7 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 
 	payload_size = sizeof(*packet->data) + BUFSIZ;
 	packet->refcnt = 0;
-	packet->data = malloc(payload_size);
+	packet->data = calloc(1, payload_size);
 	if (!packet->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
 		packet->state = INVALID;
@@ -408,7 +408,7 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 
 	payload_size = sizeof(*result->data) + BUFSIZ;
 	result->refcnt = 0;
-	result->data = malloc(payload_size);
+	result->data = calloc(1, payload_size);
 	if (!result->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
 		result->state = INVALID;
@@ -541,7 +541,7 @@ EAPI struct packet *packet_build(struct packet *packet, int offset, void *data, 
 		}
 
 		packet->refcnt = 1;
-		packet->data = malloc(size);
+		packet->data = calloc(1, size);
 		if (!packet->data) {
 			ErrPrint("Heap: %s\n", strerror(errno));
 			packet->state = INVALID;
