@@ -381,7 +381,7 @@ static void *client_cb(void *data)
 	if (write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch)) != sizeof(event_ch))
 		ErrPrint("write: %s\n", strerror(errno));
 
-	return (void *)ret;
+	return (void *)(unsigned long)ret;
 }
 
 /*!
