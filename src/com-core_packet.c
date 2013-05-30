@@ -494,7 +494,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	offset = 0;
 	ret = com_core_recv(fd, (char *)ptr, packet_header_size(), &pid, timeout);
 	if (ret <= 0) {
-		DbgPrint("Recv returns %s\n", ret);
+		DbgPrint("Recv returns %d\n", ret);
 		free(ptr);
 		goto out;
 	} else {
@@ -531,7 +531,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 
 	ret = com_core_recv(fd, (char *)ptr, size, &pid, timeout);
 	if (ret <= 0) {
-		DbgPrint("Recv returns %s\n", ret);
+		DbgPrint("Recv returns %d\n", ret);
 		free(ptr);
 		packet_destroy(result);
 		result = NULL;
