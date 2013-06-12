@@ -921,18 +921,22 @@ EAPI int com_core_thread_server_destroy(int handle)
 		if (tcb->server_handle != handle)
 			continue;
 
+		invoke_disconn_cb_list(handle);
 		terminate_thread(tcb);
 		tcb_destroy(tcb);
+		return 0;
 	}
 
 	dlist_foreach_safe(s_info.server_list, l, n, server) {
-		if (server->handle == handle) {
-			server_destroy(server);
-			break;
-		}
+		if (server->handle != handle)
+			continue;
+
+		invoke_disconn_cb_list(handle);
+		server_destroy(server);
+		return 0;
 	}
 
-	return 0;
+	return -ENOENT;
 }
 
 /*!
@@ -947,6 +951,7 @@ EAPI int com_core_thread_client_destroy(int handle)
 	if (!tcb)
 		return -ENOENT;
 
+	invoke_disconn_cb_list(handle);
 	terminate_thread(tcb);
 	tcb_destroy(tcb);
 	return 0;
