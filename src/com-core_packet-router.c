@@ -37,9 +37,6 @@
 #include "util.h"
 #include "com-core_packet-router.h"
 
-#define PIPE_READ 0
-#define PIPE_WRITE 1
-
 struct packet_item {
 	pid_t pid;
 	struct packet *packet;
@@ -100,8 +97,8 @@ struct router {
 	pthread_mutex_t send_packet_list_lock;
 	struct dlist *send_packet_list;
 
-	int recv_pipe[2];
-	int send_pipe[2];
+	int recv_pipe[PIPE_MAX];
+	int send_pipe[PIPE_MAX];
 
 	pthread_t send_thid;
 
@@ -673,11 +670,7 @@ static struct router *create_router(const char *sock, int handle, struct method 
 		ErrPrint("pipe2: %s\n", strerror(errno));
 		free(router->sock);
 
-		if (close(router->recv_pipe[0]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
-
-		if (close(router->recv_pipe[1]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
+		CLOSE_PIPE(router->recv_pipe);
 
 		ret = pthread_mutex_destroy(&router->send_packet_list_lock);
 		if (ret != 0)
@@ -701,17 +694,8 @@ static struct router *create_router(const char *sock, int handle, struct method 
 
 	gio = g_io_channel_unix_new(router->recv_pipe[PIPE_READ]);
 	if (!gio) {
-		if (close(router->recv_pipe[PIPE_READ]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
-
-		if (close(router->recv_pipe[PIPE_WRITE]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
-
-		if (close(router->send_pipe[PIPE_READ]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
-
-		if (close(router->send_pipe[PIPE_WRITE]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
+		CLOSE_PIPE(router->recv_pipe);
+		CLOSE_PIPE(router->send_pipe);
 
 		free(router->sock);
 
@@ -742,17 +726,8 @@ static struct router *create_router(const char *sock, int handle, struct method 
 		}
 		g_io_channel_unref(gio);
 
-		if (close(router->recv_pipe[PIPE_READ]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
-
-		if (close(router->recv_pipe[PIPE_WRITE]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
-
-		if (close(router->send_pipe[PIPE_READ]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
-
-		if (close(router->send_pipe[PIPE_WRITE]) < 0)
-			ErrPrint("close: %s\n", strerror(errno));
+		CLOSE_PIPE(router->recv_pipe);
+		CLOSE_PIPE(router->send_pipe);
 
 		free(router->sock);
 
@@ -783,17 +758,8 @@ static struct router *create_router(const char *sock, int handle, struct method 
 
 		g_source_remove(router->id);
 
-		if (close(router->recv_pipe[PIPE_READ]) < 0)
-			ErrPrint("Close: %s\n", strerror(errno));
-
-		if (close(router->recv_pipe[PIPE_WRITE]) < 0)
-			ErrPrint("Close: %s\n", strerror(errno));
-
-		if (close(router->send_pipe[PIPE_READ]) < 0)
-			ErrPrint("Close: %s\n", strerror(errno));
-
-		if (close(router->send_pipe[PIPE_WRITE]) < 0)
-			ErrPrint("Close: %s\n", strerror(errno));
+		CLOSE_PIPE(router->recv_pipe);
+		CLOSE_PIPE(router->send_pipe);
 
 		free(router->sock);
 
@@ -839,17 +805,8 @@ static inline __attribute__((always_inline)) int destroy_router(struct router *r
 	if (router->id > 0)
 		g_source_remove(router->id);
 
-	if (close(router->recv_pipe[PIPE_READ]) < 0)
-		ErrPrint("close: %s\n", strerror(errno));
-
-	if (close(router->recv_pipe[PIPE_WRITE]) < 0)
-		ErrPrint("close: %s\n", strerror(errno));
-
-	if (close(router->send_pipe[PIPE_READ]) < 0)
-		ErrPrint("close: %s\n", strerror(errno));
-
-	if (close(router->send_pipe[PIPE_WRITE]) < 0)
-		ErrPrint("close: %s\n", strerror(errno));
+	CLOSE_PIPE(router->recv_pipe);
+	CLOSE_PIPE(router->send_pipe);
 
 	free(router->sock);
 

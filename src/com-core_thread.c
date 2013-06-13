@@ -37,8 +37,6 @@
 #include "util.h"
 
 int errno;
-#define PIPE_READ 0
-#define PIPE_WRITE 1
 #define EVENT_READY 'a'
 #define EVENT_TERM 'e'
 
@@ -78,7 +76,8 @@ struct tcb {
 	pthread_t thid;
 	int handle;
 	struct dlist *chunk_list;
-	int evt_pipe[2];
+	int evt_pipe[PIPE_MAX];
+	int ctrl_pipe[PIPE_MAX];
 	pthread_mutex_t chunk_lock;
 	guint id; /*!< g_io_watch */
 
@@ -148,6 +147,9 @@ static inline void terminate_thread(struct tcb *tcb)
 	struct dlist *n;
 	void *res = NULL;
 	struct chunk *chunk;
+
+	if (write(tcb->ctrl_pipe[PIPE_WRITE], &tcb, sizeof(tcb)) != sizeof(tcb))
+		ErrPrint("Unable to write CTRL pipe\n");
 
 	secure_socket_destroy_handle(tcb->handle);
 
@@ -300,6 +302,7 @@ static void *client_cb(void *data)
 	fd_set set;
 	int readsize;
 	char event_ch;
+	int fd;
 
 	DbgPrint("Thread is created for %d (server: %d)\n", tcb->handle, tcb->server_handle);
 	/*!
@@ -309,8 +312,11 @@ static void *client_cb(void *data)
 	while (1) {
 		FD_ZERO(&set);
 		FD_SET(tcb->handle, &set);
+		FD_SET(tcb->ctrl_pipe[PIPE_READ], &set);
 
-		ret = select(tcb->handle + 1, &set, NULL, NULL, NULL);
+		fd = tcb->handle > tcb->ctrl_pipe[PIPE_READ] ? tcb->handle : tcb->ctrl_pipe[PIPE_READ];
+
+		ret = select(fd + 1, &set, NULL, NULL, NULL);
 		if (ret < 0) {
 			if (errno == EINTR) {
 				DbgPrint("Select receives INTR\n");
@@ -323,6 +329,12 @@ static void *client_cb(void *data)
 		} else if (ret == 0) {
 			ErrPrint("What happens? [%d]\n", tcb->handle);
 			continue;
+		}
+
+		if (FD_ISSET(tcb->ctrl_pipe[PIPE_READ], &set)) {
+			DbgPrint("Thread is canceled\n");
+			ret = -ECANCELED;
+			break;
 		}
 
 		if (!FD_ISSET(tcb->handle, &set)) {
@@ -397,11 +409,8 @@ static inline void tcb_destroy(struct tcb *tcb)
 	if (tcb->id > 0)
 		g_source_remove(tcb->id);
 
-	if (tcb->evt_pipe[PIPE_WRITE] > 0)
-		close(tcb->evt_pipe[PIPE_WRITE]);
-
-	if (tcb->evt_pipe[PIPE_READ] > 0)
-		close(tcb->evt_pipe[PIPE_READ]);
+	CLOSE_PIPE(tcb->evt_pipe);
+	CLOSE_PIPE(tcb->ctrl_pipe);
 
 	status = pthread_mutex_destroy(&tcb->chunk_lock);
 	if (status != 0)
@@ -490,7 +499,20 @@ static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_c
 		return NULL;
 	}
 
-	DbgPrint("[%d] New TCB created: %d, %d\n", client_fd, tcb->evt_pipe[0], tcb->evt_pipe[1]);
+	if (pipe2(tcb->ctrl_pipe, O_NONBLOCK | O_CLOEXEC) < 0) {
+		ErrPrint("Error: %s\n", strerror(errno));
+
+		CLOSE_PIPE(tcb->evt_pipe);
+
+		status = pthread_mutex_destroy(&tcb->chunk_lock);
+		if (status != 0)
+			ErrPrint("Error: %s\n", strerror(status));
+
+		free(tcb);
+		return NULL;
+	}
+
+	DbgPrint("[%d] New TCB created: %d, %d\n", client_fd, tcb->evt_pipe[PIPE_READ], tcb->evt_pipe[PIPE_WRITE]);
 	return tcb;
 }
 
@@ -899,18 +921,22 @@ EAPI int com_core_thread_server_destroy(int handle)
 		if (tcb->server_handle != handle)
 			continue;
 
+		invoke_disconn_cb_list(handle);
 		terminate_thread(tcb);
 		tcb_destroy(tcb);
+		return 0;
 	}
 
 	dlist_foreach_safe(s_info.server_list, l, n, server) {
-		if (server->handle == handle) {
-			server_destroy(server);
-			break;
-		}
+		if (server->handle != handle)
+			continue;
+
+		invoke_disconn_cb_list(handle);
+		server_destroy(server);
+		return 0;
 	}
 
-	return 0;
+	return -ENOENT;
 }
 
 /*!
@@ -925,6 +951,7 @@ EAPI int com_core_thread_client_destroy(int handle)
 	if (!tcb)
 		return -ENOENT;
 
+	invoke_disconn_cb_list(handle);
 	terminate_thread(tcb);
 	tcb_destroy(tcb);
 	return 0;

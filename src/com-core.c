@@ -483,6 +483,7 @@ EAPI void *com_core_del_event_callback(enum com_core_event_type type, int (*cb)(
 EAPI int com_core_server_destroy(int handle)
 {
 	DbgPrint("Close server handle[%d]\n", handle);
+	invoke_disconn_cb_list(handle);
 	secure_socket_destroy_handle(handle);
 	return 0;
 }
@@ -490,6 +491,7 @@ EAPI int com_core_server_destroy(int handle)
 EAPI int com_core_client_destroy(int handle)
 {
 	DbgPrint("Close client handle[%d]\n", handle);
+	invoke_disconn_cb_list(handle);
 	secure_socket_destroy_handle(handle);
 	return 0;
 }

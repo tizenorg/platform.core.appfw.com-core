@@ -81,7 +81,7 @@ EAPI int secure_socket_create_client(const char *peer)
 		ErrPrint("Failed to connect to server [%s] %s\n",
 							peer, strerror(errno));
 		if (close(handle) < 0)
-			ErrPrint("close a handle: %s\n", strerror(errno));
+			ErrPrint("close: %s\n", strerror(errno));
 
 		return -ENOTCONN;
 	}
@@ -89,7 +89,7 @@ EAPI int secure_socket_create_client(const char *peer)
 	if (setsockopt(handle, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0) {
 		ErrPrint("Failed to change sock opt : %s\n", strerror(errno));
 		if (close(handle) < 0)
-			ErrPrint("close a handle: %s\n", strerror(errno));
+			ErrPrint("close: %s\n", strerror(errno));
 		return -EFAULT;
 	}
 
@@ -112,7 +112,7 @@ EAPI int secure_socket_create_server(const char *peer)
 
 		ErrPrint("Failed to bind a socket %s\n", strerror(errno));
 		if (close(handle) < 0)
-			ErrPrint("Close a handle : %s\n", strerror(errno));
+			ErrPrint("close: %s\n", strerror(errno));
 
 		return state;
 	}
@@ -123,7 +123,7 @@ EAPI int secure_socket_create_server(const char *peer)
 		ErrPrint("Failed to listen a socket %s\n", strerror(errno));
 
 		if (close(handle) < 0)
-			ErrPrint("Close a handle : %s\n", strerror(errno));
+			ErrPrint("close: %s\n", strerror(errno));
 
 		return state;
 	}
@@ -154,7 +154,7 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
 		ret = -errno;
 		ErrPrint("Failed to change sock opt : %s\n", strerror(errno));
 		if (close(handle) < 0)
-			ErrPrint("Close a handle: %s\n", strerror(errno));
+			ErrPrint("close: %s\n", strerror(errno));
 		return ret;
 	}
 
@@ -248,7 +248,7 @@ EAPI int secure_socket_destroy_handle(int handle)
 {
 	DbgPrint("Close socket handle %d\n", handle);
 	if (close(handle) < 0) {
-		ErrPrint("Failed to close a handle: %s\n", strerror(errno));
+		ErrPrint("close: %s\n", strerror(errno));
 		return -1;
 	}
 	return 0;
