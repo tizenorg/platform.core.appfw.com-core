@@ -134,19 +134,18 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	}
 
 	if ((cond & G_IO_ERR) || (cond & G_IO_HUP) || (cond & G_IO_NVAL)) {
-		DbgPrint("Client connection is lost\n");
+		ErrPrint("Client connection is lost\n");
 		secure_socket_destroy_handle(socket_fd);
 		free(cbdata);
 		return FALSE;
 	}
 
-	DbgPrint("New connectino arrived: socket(%d)\n", socket_fd);
 	client_fd = secure_socket_get_connection_handle(socket_fd);
 	if (client_fd < 0) {
 		free(cbdata);
 		return FALSE;
 	}
-	DbgPrint("New client: %d\n", client_fd);
+	DbgPrint("New connectino arrived: server(%d), client(%d)\n", socket_fd, client_fd);
 
 	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("Error: %s\n", strerror(errno));
@@ -182,7 +181,6 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	g_io_channel_unref(gio);
 
 	invoke_con_cb_list(client_fd);
-	DbgPrint("New client is connected with %d\n", client_fd);
 	return TRUE;
 }
 
@@ -214,7 +212,7 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
 		ErrPrint("fcntl: %s\n", strerror(errno));
 
-	DbgPrint("Create new IO channel for socket FD: %d\n", fd);
+	DbgPrint("Create new IO channel for server FD: %d\n", fd);
 	gio = g_io_channel_unix_new(fd);
 	if (!gio) {
 		ErrPrint("Failed to create new io channel\n");

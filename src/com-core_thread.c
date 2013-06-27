@@ -437,12 +437,12 @@ static gboolean evt_pipe_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	}
 
 	if (!(cond & G_IO_IN)) {
-		DbgPrint("PIPE is not valid\n");
+		ErrPrint("PIPE is not valid\n");
 		goto errout;
 	}
 
 	if ((cond & G_IO_ERR) || (cond & G_IO_HUP) || (cond & G_IO_NVAL)) {
-		DbgPrint("PIPE is not valid\n");
+		ErrPrint("PIPE is not valid\n");
 		goto errout;
 	}
 
@@ -512,7 +512,7 @@ static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_c
 		return NULL;
 	}
 
-	DbgPrint("[%d] New TCB created: %d, %d\n", client_fd, tcb->evt_pipe[PIPE_READ], tcb->evt_pipe[PIPE_WRITE]);
+	DbgPrint("[%d] New TCB created: R(%d), W(%d)\n", client_fd, tcb->evt_pipe[PIPE_READ], tcb->evt_pipe[PIPE_WRITE]);
 	return tcb;
 }
 
@@ -542,7 +542,6 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		return FALSE;
 	}
 
-	DbgPrint("New connection is made: socket(%d)\n", socket_fd);
 	fd = secure_socket_get_connection_handle(socket_fd);
 	if (fd < 0) {
 		ErrPrint("Failed to get client fd from socket\n");
@@ -550,7 +549,6 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		return FALSE;
 	}
 
-	DbgPrint("New client: %d\n", fd);
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("Error: %s\n", strerror(errno));
 
@@ -596,7 +594,6 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	}
 	g_io_channel_unref(gio);
 
-	DbgPrint("New client is connected with %d\n", tcb->handle);
 	invoke_con_cb_list(tcb->handle);
 
 	ret = pthread_create(&tcb->thid, NULL, client_cb, tcb);
@@ -671,7 +668,6 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 
 	g_io_channel_unref(gio);
 
-	DbgPrint("New client is connected with %d\n", client_fd);
 	invoke_con_cb_list(tcb->handle);
 
 	ret = pthread_create(&tcb->thid, NULL, client_cb, tcb);

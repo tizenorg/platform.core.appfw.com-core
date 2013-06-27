@@ -471,8 +471,6 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	if (fd < 0)
 		return NULL;
 
-	DbgPrint("FD: %d\n", fd);
-
 	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
 		ErrPrint("fcntl: %s\n", strerror(errno));
 
@@ -482,8 +480,6 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	ret = com_core_send(fd, (char *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
 	if (ret < 0)
 		goto out;
-
-	DbgPrint("Sent: %d bytes (%d bytes)\n", ret, packet_size(packet));
 
 	ptr = malloc(packet_header_size());
 	if (!ptr) {
@@ -509,7 +505,6 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	}
 
 	size = packet_payload_size(result);
-	DbgPrint("Payload size: %d\n", size);
 	if (size < 0) {
 		packet_destroy(result);
 		result = NULL;
