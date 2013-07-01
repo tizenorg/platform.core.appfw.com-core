@@ -5,6 +5,7 @@ Release: 1
 Group: HomeTF/Framework
 License: Apache License
 Source0: %{name}-%{version}.tar.gz
+Source1001: 	libcom-core.manifest
 BuildRequires: cmake, gettext-tools, coreutils
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(glib-2.0)
@@ -22,6 +23,7 @@ Light-weight IPC supporting library (dev)
 
 %prep
 %setup -q
+cp %{SOURCE1001} .
 
 %build
 %cmake
@@ -35,12 +37,13 @@ mkdir -p %{buildroot}/%{_datarootdir}/license
 %post
 
 %files -n libcom-core
-%manifest libcom-core.manifest
+%manifest %{name}.manifest
 %defattr(-,root,root,-)
 %{_libdir}/*.so*
 %{_datarootdir}/license/*
 
 %files devel
+%manifest %{name}.manifest
 %defattr(-,root,root,-)
 %{_includedir}/com-core/com-core.h
 %{_includedir}/com-core/packet.h
