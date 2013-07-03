@@ -25,7 +25,7 @@ extern "C" {
 enum com_core_route_event_type {
 	COM_CORE_ROUTE_CONNECTED,
 	COM_CORE_ROUTE_DISCONNECTED,
-	COM_CORE_ROUTE_ERROR,
+	COM_CORE_ROUTE_ERROR
 };
 
 extern int com_core_packet_router_add_route(int handle, unsigned long address, int to);
