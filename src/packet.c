@@ -49,7 +49,7 @@ struct data {
 struct packet {
 	enum {
 		VALID = 0xbeefbeef,
-		INVALID = 0xdeaddead,
+		INVALID = 0xdeaddead
 	} state;
 	int refcnt;
 	struct data *data;
