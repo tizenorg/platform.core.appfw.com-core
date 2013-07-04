@@ -83,7 +83,7 @@ struct recv_ctx {
 		RECV_STATE_INIT,
 		RECV_STATE_HEADER,
 		RECV_STATE_BODY,
-		RECV_STATE_READY,
+		RECV_STATE_READY
 	} state;
 	int handle;
 	int offset;
