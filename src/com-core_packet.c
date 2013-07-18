@@ -76,6 +76,8 @@ struct request_ctx {
 	struct packet *packet;
 	int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data);
 	void *data;
+
+	int in_recv;
 };
 
 struct recv_ctx {
@@ -128,6 +130,7 @@ static inline struct request_ctx *create_request_ctx(int handle)
 	ctx->packet = NULL;
 	ctx->recv_cb = NULL;
 	ctx->data = NULL;
+	ctx->in_recv = 0;
 
 	s_info.request_list = dlist_append(s_info.request_list, ctx);
 	return ctx;
@@ -193,8 +196,11 @@ static inline int packet_ready(int handle, const struct recv_ctx *receive, struc
 			break;
 		}
 
-		if (request->recv_cb)
+		if (request->recv_cb) {
+			request->in_recv = 1;
 			request->recv_cb(receive->pid, handle, receive->packet, request->data);
+			request->in_recv = 0;
+		}
 
 		destroy_request_ctx(request);
 		break;
@@ -244,12 +250,11 @@ static int client_disconnected_cb(int handle, void *data)
 	struct dlist *l;
 	struct dlist *n;
 	pid_t pid = (pid_t)-1;
+	int referred = 0;
 
 	receive = find_recv_ctx(handle);
-	if (receive) {
+	if (receive)
 		pid = receive->pid;
-		destroy_recv_ctx(receive);
-	}
 
 	DbgPrint("Clean up all requests and a receive context for handle(%d) for pid(%d)\n", handle, pid);
 
@@ -257,11 +262,19 @@ static int client_disconnected_cb(int handle, void *data)
 		if (request->handle != handle)
 			continue;
 
+		if (request->in_recv) {
+			referred = 1;
+			continue;
+		}
+
 		if (request->recv_cb)
 			request->recv_cb(pid, handle, NULL, request->data);
 
 		destroy_request_ctx(request);
 	}
+
+	if (receive && !referred)
+		destroy_recv_ctx(receive);
 
 	return 0;
 }
