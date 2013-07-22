@@ -34,6 +34,8 @@
 #include "util.h"
 
 #define BACKLOG 50	/*!< Accept only 50 connections as default */
+#define SNDBUF_SZ	262144
+#define RCVBUF_SZ	524288
 
 int errno;
 
@@ -71,6 +73,8 @@ EAPI int secure_socket_create_client(const char *peer)
 	int handle;
 	int state;
 	int on = 1;
+	int sndbuf = SNDBUF_SZ;
+	int rcvbuf = RCVBUF_SZ;
 
 	handle = create_socket(peer, &addr);
 	if (handle < 0)
@@ -91,6 +95,18 @@ EAPI int secure_socket_create_client(const char *peer)
 		if (close(handle) < 0)
 			ErrPrint("close: %s\n", strerror(errno));
 		return -EFAULT;
+	}
+
+	if (setsockopt(handle, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf)) < 0) {
+		ErrPrint("Failed to change rcvbuf size: %s\n", strerror(errno));
+	} else {
+		DbgPrint("rcvbuf: %d\n", rcvbuf);
+	}
+
+	if (setsockopt(handle, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf)) < 0) {
+		ErrPrint("Failed to change rcvbuf size: %s\n", strerror(errno));
+	} else {
+		DbgPrint("sndbuf: %d\n", sndbuf);
 	}
 
 	return handle;
@@ -141,6 +157,8 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
 	int handle;
 	int on = 1;
 	socklen_t size = sizeof(addr);
+	int sndbuf = SNDBUF_SZ;
+	int rcvbuf = RCVBUF_SZ;
 
 	handle = accept(server_handle, (struct sockaddr *)&addr, &size);
 	if (handle < 0) {
@@ -156,6 +174,18 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
 		if (close(handle) < 0)
 			ErrPrint("close: %s\n", strerror(errno));
 		return ret;
+	}
+
+	if (setsockopt(handle, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf)) < 0) {
+		ErrPrint("Failed to change rcvbuf size: %s\n", strerror(errno));
+	} else {
+		DbgPrint("rcvbuf: %d\n", rcvbuf);
+	}
+
+	if (setsockopt(handle, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf)) < 0) {
+		ErrPrint("Failed to change rcvbuf size: %s\n", strerror(errno));
+	} else {
+		DbgPrint("sndbuf: %d\n", sndbuf);
 	}
 
 	return handle;
