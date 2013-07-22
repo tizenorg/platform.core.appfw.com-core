@@ -25,6 +25,7 @@
 #include <arpa/inet.h>
 #include <sys/un.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <errno.h>
 
 #include <dlog.h>
@@ -109,6 +110,12 @@ EAPI int secure_socket_create_client(const char *peer)
 		DbgPrint("sndbuf: %d\n", sndbuf);
 	}
 
+	if (setsockopt(handle, IPPROTO_IP, TCP_NODELAY, &on, sizeof(on)) < 0) {
+		ErrPrint("Failed to change rcvbuf size: %s\n", strerror(errno));
+	} else {
+		DbgPrint("TCP_NODELAY: %d\n", on);
+	}
+
 	return handle;
 }
 
@@ -186,6 +193,12 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
 		ErrPrint("Failed to change rcvbuf size: %s\n", strerror(errno));
 	} else {
 		DbgPrint("sndbuf: %d\n", sndbuf);
+	}
+
+	if (setsockopt(handle, IPPROTO_IP, TCP_NODELAY, &on, sizeof(on)) < 0) {
+		ErrPrint("Failed to change rcvbuf size: %s\n", strerror(errno));
+	} else {
+		DbgPrint("TCP_NODELAY: %d\n", on);
 	}
 
 	return handle;
