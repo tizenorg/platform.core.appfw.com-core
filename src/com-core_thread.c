@@ -215,6 +215,9 @@ static inline void chunk_append(struct tcb *tcb, struct chunk *chunk)
 
 	if (ret != sizeof(event_ch))
 		ErrPrint("Failed to trigger reader\n");
+
+	/* Take a breathe */
+	pthread_yield();
 }
 
 /*!
