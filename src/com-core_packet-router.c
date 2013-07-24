@@ -314,7 +314,7 @@ static inline struct request_ctx *create_request_ctx(int handle)
  * \NOTE
  * Running thread: Main
  */
-static inline struct router *find_router_by_handle(int handle)
+static struct router *find_router_by_handle(int handle)
 {
 	struct dlist *l;
 	struct router *router;
