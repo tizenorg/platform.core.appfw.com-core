@@ -888,7 +888,7 @@ static inline int route_packet(struct router *router, int handle, struct packet 
  * \NOTE
  * Running Threads: Main / Client / Server
  */
-static inline int put_send_packet(struct router *router, int handle, struct packet *packet)
+static int put_send_packet(struct router *router, int handle, struct packet *packet)
 {
 	if (packet) {
 		struct packet_item *item;
