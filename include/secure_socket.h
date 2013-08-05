@@ -22,6 +22,18 @@
 extern "C" {
 #endif
 
+/*!
+ * local:///tmp/.socket.file => /tmp/.socket.file
+ */
+#define COM_CORE_LOCAL_SCHEME		"local://"
+#define COM_CORE_LOCAL_SCHEME_LEN	(8)
+
+/*!
+ * remote://IPADDR:PORT
+ * remote://:PORT	=> Using INADDR_ANY in this case
+ */
+#define COM_CORE_REMOTE_SCHEME		"remote://"
+#define COM_CORE_REMOTE_SCHEME_LEN	(9)
 
 /*
  * Create client connection
