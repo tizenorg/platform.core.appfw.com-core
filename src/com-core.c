@@ -147,11 +147,13 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	}
 	DbgPrint("New connectino arrived: server(%d), client(%d)\n", socket_fd, client_fd);
 
-	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
-	if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0)
+	if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
 	gio = g_io_channel_unix_new(client_fd);
 	if (!gio) {
@@ -206,11 +208,13 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 		return fd;
 	}
 
-	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("fcntl: %s\n", strerror(errno));
+	}
 
-	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("fcntl: %s\n", strerror(errno));
+	}
 
 	DbgPrint("Create new IO channel for server FD: %d\n", fd);
 	gio = g_io_channel_unix_new(fd);
@@ -264,11 +268,13 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 		return client_fd;
 	}
 
-	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
-	if (!is_sync && fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0)
+	if (!is_sync && fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
 	gio = g_io_channel_unix_new(client_fd);
 	if (!gio) {
@@ -312,10 +318,11 @@ EAPI int com_core_add_event_callback(enum com_core_event_type type, int (*evt_cb
 	cbdata->evt_cb = evt_cb;
 	cbdata->data = data;
 
-	if (type == CONNECTOR_CONNECTED)
+	if (type == CONNECTOR_CONNECTED) {
 		s_info.conn_cb_list = dlist_append(s_info.conn_cb_list, cbdata);
-	else
+	} else {
 		s_info.disconn_cb_list = dlist_append(s_info.disconn_cb_list, cbdata);
+	}
 	return 0;
 }
 
