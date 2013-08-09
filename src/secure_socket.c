@@ -92,10 +92,11 @@ static inline int create_inet_socket(const char *peer, int port, struct sockaddr
 
 	in_addr->sin_port = htons(port);
 	in_addr->sin_family = AF_INET;
-	if (*peer == '\0')
+	if (*peer == '\0') {
 		in_addr->sin_addr.s_addr = htonl(INADDR_ANY);
-	else
+	} else {
 		in_addr->sin_addr.s_addr = inet_addr(peer);
+	}
 
 	handle = socket(AF_INET, SOCK_STREAM, 0);
 	if (handle < 0) {
@@ -150,8 +151,9 @@ static inline char *parse_scheme(const char *peer, int *port, struct function_ta
 		peer += COM_CORE_LOCAL_SCHEME_LEN;
 
 		addr = strdup(peer);
-		if (!addr)
+		if (!addr) {
 			ErrPrint("Heap: %s\n", strerror(errno));
+		}
 
 		vtable->create_socket = create_unix_socket;
 		vtable->setup_handle = setup_unix_handle;
@@ -174,8 +176,10 @@ static inline char *parse_scheme(const char *peer, int *port, struct function_ta
 			goto out;
 		}
 
-		if (len > 0)
+		if (len > 0) {
 			strncpy(addr, peer, len);
+		}
+
 		addr[len] = '\0';
 
 		peer += len + 1;
@@ -240,24 +244,27 @@ EAPI int secure_socket_create_client(const char *peer)
 
 	handle = vtable.create_socket(addr, port, sockaddr);
 	free(addr);
-	if (handle < 0)
+	if (handle < 0) {
 		return handle;
+	}
 
 	ret = connect(handle, sockaddr, addrlen);
 	if (ret < 0) {
 		ret = -errno;
 		ErrPrint("Failed to connect to server [%s] %s\n",
 							peer, strerror(errno));
-		if (close(handle) < 0)
+		if (close(handle) < 0) {
 			ErrPrint("close: %s\n", strerror(errno));
+		}
 
 		return ret;
 	}
 
 	ret = vtable.setup_handle(handle);
 	if (ret < 0) {
-		if (close(handle) < 0)
+		if (close(handle) < 0) {
 			ErrPrint("close: %s\n", strerror(errno));
+		}
 
 		return ret;
 	}
@@ -299,15 +306,17 @@ EAPI int secure_socket_create_server(const char *peer)
 
 	handle = vtable.create_socket(addr, port, sockaddr);
 	free(addr);
-	if (handle < 0)
+	if (handle < 0) {
 		return handle;
+	}
 
 	ret = bind(handle, sockaddr, addrlen);
 	if (ret < 0) {
 		ret = -errno;
 		ErrPrint("bind: %s\n", strerror(errno));
-		if (close(handle) < 0)
+		if (close(handle) < 0) {
 			ErrPrint("close: %s\n", strerror(errno));
+		}
 		return ret;
 	}
 
@@ -315,14 +324,16 @@ EAPI int secure_socket_create_server(const char *peer)
 	if (ret < 0) {
 		ret = -errno;
 		ErrPrint("listen: %s\n", strerror(errno));
-		if (close(handle) < 0)
+		if (close(handle) < 0) {
 			ErrPrint("close: %s\n", strerror(errno));
+		}
 		return ret;
 	}
 
 	if (vtable.type == SCHEME_LOCAL) {
-		if (chmod(peer, 0666) < 0)
+		if (chmod(peer, 0666) < 0) {
 			ErrPrint("Failed to change the permission of a socket (%s)\n", strerror(errno));
+		}
 	}
 
 	return handle;
@@ -356,16 +367,18 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
 	if (addr->sa_family == AF_UNIX) {
 		ret = setup_unix_handle(handle);
 		if (ret < 0) {
-			if (close(handle) < 0)
+			if (close(handle) < 0) {
 				ErrPrint("close: %s\n", strerror(errno));
+			}
 
 			handle = ret;
 		}
 	} else if (addr->sa_family == AF_INET) {
 		ret = setup_inet_handle(handle);
 		if (ret < 0) {
-			if (close(handle) < 0)
+			if (close(handle) < 0) {
 				ErrPrint("close: %s\n", strerror(errno));
+			}
 
 			handle = ret;
 		}
@@ -416,11 +429,13 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 	int _pid;
 	int ret;
 
-	if (size <= 0 || !buffer)
+	if (size <= 0 || !buffer) {
 		return -EINVAL;
+	}
 
-	if (!sender_pid)
+	if (!sender_pid) {
 		sender_pid = &_pid;
+	}
 
 	memset(&msg, 0, sizeof(msg));
 	iov.iov_base = buffer;

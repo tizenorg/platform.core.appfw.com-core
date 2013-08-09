@@ -95,11 +95,13 @@ static inline void server_destroy(struct server *server)
 {
 	dlist_remove_data(s_info.server_list, server);
 
-	if (server->id > 0)
+	if (server->id > 0) {
 		g_source_remove(server->id);
+	}
 
-	if (server->handle > 0)
+	if (server->handle > 0) {
 		secure_socket_destroy_handle(server->handle);
+	}
 
 	free(server);
 }
@@ -148,14 +150,16 @@ static inline void terminate_thread(struct tcb *tcb)
 	void *res = NULL;
 	struct chunk *chunk;
 
-	if (write(tcb->ctrl_pipe[PIPE_WRITE], &tcb, sizeof(tcb)) != sizeof(tcb))
+	if (write(tcb->ctrl_pipe[PIPE_WRITE], &tcb, sizeof(tcb)) != sizeof(tcb)) {
 		ErrPrint("Unable to write CTRL pipe\n");
+	}
 
 	secure_socket_destroy_handle(tcb->handle);
 
 	status = pthread_join(tcb->thid, &res);
-	if (status != 0)
+	if (status != 0) {
 		ErrPrint("Join: %s\n", strerror(status));
+	}
 	else
 		ErrPrint("Thread returns: %d\n", (int)res);
 
@@ -213,8 +217,9 @@ static inline void chunk_append(struct tcb *tcb, struct chunk *chunk)
 		return;
 	}
 
-	if (ret != sizeof(event_ch))
+	if (ret != sizeof(event_ch)) {
 		ErrPrint("Failed to trigger reader\n");
+	}
 
 	/* Take a breathe */
 	pthread_yield();
@@ -393,8 +398,9 @@ static void *client_cb(void *data)
 	DbgPrint("Client CB is terminated (%d)\n", tcb->handle);
 	/* Wake up main thread to get disconnected event */
 	event_ch = EVENT_TERM;
-	if (write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch)) != sizeof(event_ch))
+	if (write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch)) != sizeof(event_ch)) {
 		ErrPrint("write: %s\n", strerror(errno));
+	}
 
 	return (void *)ret;
 }
@@ -409,15 +415,17 @@ static inline void tcb_destroy(struct tcb *tcb)
 
 	dlist_remove_data(s_info.tcb_list, tcb);
 
-	if (tcb->id > 0)
+	if (tcb->id > 0) {
 		g_source_remove(tcb->id);
+	}
 
 	CLOSE_PIPE(tcb->evt_pipe);
 	CLOSE_PIPE(tcb->ctrl_pipe);
 
 	status = pthread_mutex_destroy(&tcb->chunk_lock);
-	if (status != 0)
+	if (status != 0) {
 		ErrPrint("Failed to destroy mutex: %s\n", strerror(status));
+	}
 
 	free(tcb);
 }
@@ -496,8 +504,9 @@ static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_c
 	if (pipe2(tcb->evt_pipe, (is_sync ? 0 : O_NONBLOCK) | O_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
 		status = pthread_mutex_destroy(&tcb->chunk_lock);
-		if (status != 0)
+		if (status != 0) {
 			ErrPrint("Error: %s\n", strerror(status));
+		}
 		free(tcb);
 		return NULL;
 	}
@@ -508,8 +517,9 @@ static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_c
 		CLOSE_PIPE(tcb->evt_pipe);
 
 		status = pthread_mutex_destroy(&tcb->chunk_lock);
-		if (status != 0)
+		if (status != 0) {
 			ErrPrint("Error: %s\n", strerror(status));
+		}
 
 		free(tcb);
 		return NULL;
@@ -552,11 +562,13 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		return FALSE;
 	}
 
-	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
-	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
 	tcb = tcb_create(fd, 0, server->service_cb, server->data);
 	if (!tcb) {
@@ -627,11 +639,13 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 	if (client_fd < 0)
 		return client_fd;
 
-	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
-	if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0)
+	if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
 	tcb = tcb_create(client_fd, is_sync, service_cb, data);
 	if (!tcb) {
@@ -696,14 +710,17 @@ EAPI int com_core_thread_server_create(const char *addr, int is_sync, int (*serv
 	struct server *server;
 
 	fd = secure_socket_create_server(addr);
-	if (fd < 0)
+	if (fd < 0) {
 		return fd;
+	}
 
-	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("fcntl: %s\n", strerror(errno));
+	}
 
-	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("fcntl: %s\n", strerror(errno));
+	}
 
 	server = server_create(fd, service_cb, data);
 	if (!server) {
@@ -749,8 +766,9 @@ static inline struct tcb *find_tcb_by_handle(int handle)
 	struct tcb *tcb;
 
 	dlist_foreach(s_info.tcb_list, l, tcb) {
-		if (tcb->handle == handle)
+		if (tcb->handle == handle) {
 			return tcb;
+		}
 	}
 
 	return NULL;
@@ -898,8 +916,9 @@ EAPI int com_core_thread_recv(int handle, char *buffer, int size, int *sender_pi
 
 		*sender_pid = chunk->pid;
 
-		if (chunk->offset == chunk->size)
+		if (chunk->offset == chunk->size) {
 			chunk_remove(tcb, chunk);
+		}
 	}
 
 	return readsize;
@@ -917,8 +936,9 @@ EAPI int com_core_thread_server_destroy(int handle)
 	struct server *server;
 
 	dlist_foreach_safe(s_info.tcb_list, l, n, tcb) {
-		if (tcb->server_handle != handle)
+		if (tcb->server_handle != handle) {
 			continue;
+		}
 
 		invoke_disconn_cb_list(handle);
 		terminate_thread(tcb);
@@ -927,8 +947,9 @@ EAPI int com_core_thread_server_destroy(int handle)
 	}
 
 	dlist_foreach_safe(s_info.server_list, l, n, server) {
-		if (server->handle != handle)
+		if (server->handle != handle) {
 			continue;
+		}
 
 		invoke_disconn_cb_list(handle);
 		server_destroy(server);
@@ -947,8 +968,9 @@ EAPI int com_core_thread_client_destroy(int handle)
 	struct tcb *tcb;
 
 	tcb = find_tcb_by_handle(handle);
-	if (!tcb)
+	if (!tcb) {
 		return -ENOENT;
+	}
 
 	invoke_disconn_cb_list(handle);
 	terminate_thread(tcb);

@@ -57,24 +57,27 @@ struct packet {
 
 EAPI const enum packet_type const packet_type(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return PACKET_ERROR;
+	}
 
 	return packet->data->head.type;
 }
 
 EAPI unsigned long packet_mask(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return 0;
+	}
 
 	return packet->data->head.mask;
 }
 
 EAPI int packet_set_mask(struct packet *packet, unsigned long mask)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return -EINVAL;
+	}
 
 	packet->data->head.mask = mask;
 	return 0;
@@ -82,16 +85,18 @@ EAPI int packet_set_mask(struct packet *packet, unsigned long mask)
 
 EAPI const enum packet_flag const packet_flag(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return PACKET_FLAG_ERROR;
+	}
 
 	return packet->data->head.flag;
 }
 
 EAPI int packet_set_flag(struct packet *packet, enum packet_flag flag)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return -EINVAL;
+	}
 
 	packet->data->head.flag = flag;
 	return 0;
@@ -99,16 +104,18 @@ EAPI int packet_set_flag(struct packet *packet, enum packet_flag flag)
 
 EAPI const unsigned long const packet_source(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return 0;
+	}
 
 	return packet->data->head.source;
 }
 
 EAPI int packet_set_source(struct packet *packet, unsigned long source)
 {
-	if (!packet || packet->state != VALID || !packet->data || !source)
+	if (!packet || packet->state != VALID || !packet->data || !source) {
 		return -EINVAL;
+	}
 
 	packet->data->head.source = source;
 	return 0;
@@ -116,16 +123,18 @@ EAPI int packet_set_source(struct packet *packet, unsigned long source)
 
 EAPI const unsigned long const packet_destination(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return 0;
+	}
 
 	return packet->data->head.destination;
 }
 
 EAPI int packet_set_destination(struct packet *packet, unsigned long destination)
 {
-	if (!packet || packet->state != VALID || !packet->data || !destination)
+	if (!packet || packet->state != VALID || !packet->data || !destination) {
 		return -EINVAL;
+	}
 
 	packet->data->head.destination = destination;
 	return 0;
@@ -133,8 +142,9 @@ EAPI int packet_set_destination(struct packet *packet, unsigned long destination
 
 EAPI const int const packet_version(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return PACKET_ERROR;
+	}
 
 	return packet->data->head.version;
 }
@@ -148,40 +158,45 @@ EAPI const int const packet_header_size(void)
 
 EAPI const int const packet_size(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return -EINVAL;
+	}
 
 	return sizeof(*packet->data) + packet->data->head.payload_size;
 }
 
 EAPI const double const packet_seq(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return 0;
+	}
 
 	return packet->data->head.seq;
 }
 
 EAPI const int const packet_payload_size(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return -EINVAL;
+	}
 
 	return packet->data->head.payload_size;
 }
 
 EAPI const char * const packet_command(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data)
+	if (!packet || packet->state != VALID || !packet->data) {
 		return NULL;
+	}
 
 	return packet->data->head.command;
 }
 
 EAPI const void * const packet_data(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID) {
 		return NULL;
+	}
 
 	return packet->data;
 }
@@ -190,8 +205,9 @@ static inline __attribute__((always_inline)) struct data *check_and_expand_packe
 {
 	struct data *new_packet;
 
-	if (packet->head.payload_size < *payload_size)
+	if (packet->head.payload_size < *payload_size) {
 		return packet;
+	}
 
 	new_packet = realloc(packet, sizeof(*packet) + *payload_size + BUFSIZ); /*!< Expanding to +BUFSIZ */
 	if (!new_packet) {
@@ -289,8 +305,9 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	struct packet *result;
 	va_list va;
 
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID) {
 		return NULL;
+	}
 
 	result = malloc(sizeof(*result));
 	if (!result) {
@@ -331,8 +348,9 @@ EAPI int packet_swap_address(struct packet *packet)
 {
 	unsigned long tmp;
 
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID) {
 		return -EINVAL;
+	}
 
 	tmp = packet->data->head.source;
 	packet->data->head.source = packet->data->head.destination;
@@ -446,8 +464,9 @@ EAPI int packet_get(const struct packet *packet, const char *fmt, ...)
 	double *double_ptr;
 	char **str_ptr;
 
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID) {
 		return -EINVAL;
+	}
 
 	va_start(va, fmt);
 
@@ -490,8 +509,9 @@ out:
 
 EAPI struct packet *packet_ref(struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID) {
 		return NULL;
+	}
 
 	packet->refcnt++;
 	return packet;
@@ -499,8 +519,9 @@ EAPI struct packet *packet_ref(struct packet *packet)
 
 EAPI struct packet *packet_unref(struct packet *packet)
 {
-	if (!packet || packet->state != VALID)
+	if (!packet || packet->state != VALID) {
 		return NULL;
+	}
 
 	packet->refcnt--;
 	if (packet->refcnt < 0) {
