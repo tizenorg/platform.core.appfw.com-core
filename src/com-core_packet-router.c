@@ -276,11 +276,13 @@ static inline void clear_request_ctx(int handle)
 	struct dlist *n;
 
 	dlist_foreach_safe(s_info.request_list, l, n, ctx) {
-		if (ctx->handle != handle)
+		if (ctx->handle != handle) {
 			continue;
+		}
 
-		if (ctx->recv_cb)
+		if (ctx->recv_cb) {
 			ctx->recv_cb(-1, handle, NULL, ctx->data);
+		}
 
 		destroy_request_ctx(ctx);
 	}
@@ -327,8 +329,9 @@ static struct router *find_router_by_handle(int handle)
 			 * Find the client list
 			 */
 			dlist_foreach(router->info.server.client_list, cl, client) {
-				if (client->handle == handle)
+				if (client->handle == handle) {
 					return router;
+				}
 			}
 		} else if (router->handle == handle) {
 			return router;
@@ -385,8 +388,9 @@ static gboolean packet_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 				break;
 			}
 
-			if (request->recv_cb)
+			if (request->recv_cb) {
 				request->recv_cb(pid, handle, packet, request->data);
+			}
 
 			destroy_request_ctx(request);
 			break;
@@ -415,8 +419,9 @@ static gboolean packet_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 			}
 
 			ret = put_send_packet(router, handle, packet);
-			if (ret < 0)
+			if (ret < 0) {
 				ErrPrint("Failed to send a packet\n");
+			}
 			break;
 		case PACKET_ERROR:
 		default:
@@ -455,8 +460,9 @@ static struct packet *service_handler(int handle, pid_t pid, const struct packet
 
 	result = NULL;
 	for (i = 0; table[i].cmd; i++) {
-		if (strcmp(table[i].cmd, packet_command(packet)))
+		if (strcmp(table[i].cmd, packet_command(packet))) {
 			continue;
+		}
 
 		result = table[i].handler(pid, handle, packet);
 		break;
@@ -479,8 +485,9 @@ static inline int select_event(int handle, double timeout)
 	FD_SET(handle, &set);
 
 	status = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-	if (status != 0)
+	if (status != 0) {
 		ErrPrint("Failed to set cancelstate: %s\n", strerror(status));
+	}
 	if (timeout > 0.0f) {
 		struct timeval tv;
 
@@ -493,8 +500,9 @@ static inline int select_event(int handle, double timeout)
 	} else {
 		ErrPrint("Invalid timeout: %lf (it must be greater than 0.0)\n", timeout);
 		status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-		if (status != 0)
+		if (status != 0) {
 			ErrPrint("Failed to set cancelstate: %s\n", strerror(status));
+		}
 		return -EINVAL;
 	}
 
@@ -508,19 +516,22 @@ static inline int select_event(int handle, double timeout)
 
 		ErrPrint("Error: %s\n", strerror(errno));
 		status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-		if (status != 0)
+		if (status != 0) {
 			ErrPrint("Failed to set cancelstate: %s\n", strerror(status));
+		}
 		return ret;
 	} else if (ret == 0) {
 		ErrPrint("Timeout expired\n");
 		status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-		if (status != 0)
+		if (status != 0) {
 			ErrPrint("Failed to set cancelstate: %s\n", strerror(status));
+		}
 		return -ETIMEDOUT;
 	}
 	status = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-	if (status != 0)
+	if (status != 0) {
 		ErrPrint("Failed to set cancelstate: %s\n", strerror(status));
+	}
 
 	if (!FD_ISSET(handle, &set)) {
 		ErrPrint("Unexpected handle is toggled\n");
@@ -547,11 +558,13 @@ static void *send_main(void *data)
 		 * select event has cancel point
 		 */
 		ret = select_event(router->send_pipe[PIPE_READ], 0.0f);
-		if (ret == -EAGAIN)
+		if (ret == -EAGAIN) {
 			continue;
+		}
 
-		if (ret < 0)
+		if (ret < 0) {
 			break;
+		}
 
 		packet = get_send_packet(router, &handle);
 		if (!packet) {
@@ -602,8 +615,9 @@ static struct router *create_router(const char *sock, int handle, struct method 
 	if (ret != 0) {
 		ErrPrint("Mutex craetion failed: %s\n", strerror(ret));
 		ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		free(router);
 		return NULL;
@@ -614,12 +628,14 @@ static struct router *create_router(const char *sock, int handle, struct method 
 		ErrPrint("Mutex creation failed: %s\n", strerror(ret));
 
 		ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->route_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		free(router);
 		return NULL;
@@ -629,16 +645,19 @@ static struct router *create_router(const char *sock, int handle, struct method 
 	if (!router->sock) {
 		ErrPrint("Heap: %s\n", strerror(errno));
 		ret = pthread_mutex_destroy(&router->send_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->route_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		free(router);
 		return NULL;
@@ -650,16 +669,19 @@ static struct router *create_router(const char *sock, int handle, struct method 
 		free(router->sock);
 
 		ret = pthread_mutex_destroy(&router->send_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->route_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		free(router);
 		return NULL;
@@ -673,16 +695,19 @@ static struct router *create_router(const char *sock, int handle, struct method 
 		CLOSE_PIPE(router->recv_pipe);
 
 		ret = pthread_mutex_destroy(&router->send_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->route_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		free(router);
 		return NULL;
@@ -700,16 +725,19 @@ static struct router *create_router(const char *sock, int handle, struct method 
 		free(router->sock);
 
 		ret = pthread_mutex_destroy(&router->send_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->route_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		free(router);
 		return NULL;
@@ -732,16 +760,19 @@ static struct router *create_router(const char *sock, int handle, struct method 
 		free(router->sock);
 
 		ret = pthread_mutex_destroy(&router->send_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->route_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		free(router);
 		return NULL;
@@ -764,16 +795,19 @@ static struct router *create_router(const char *sock, int handle, struct method 
 		free(router->sock);
 
 		ret = pthread_mutex_destroy(&router->send_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		ret = pthread_mutex_destroy(&router->route_list_lock);
-		if (ret != 0)
+		if (ret != 0) {
 			ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+		}
 
 		free(router);
 		return NULL;
@@ -797,13 +831,15 @@ static inline __attribute__((always_inline)) int destroy_router(struct router *r
 	DbgPrint("Put NULL Packet to terminate send thread (%d)\n", ret);
 
 	ret = pthread_join(router->send_thid, NULL);
-	if (ret != 0)
+	if (ret != 0) {
 		ErrPrint("Join: %s\n", strerror(ret));
+	}
 
 	dlist_remove_data(s_info.router_list, router);
 
-	if (router->id > 0)
+	if (router->id > 0) {
 		g_source_remove(router->id);
+	}
 
 	CLOSE_PIPE(router->recv_pipe);
 	CLOSE_PIPE(router->send_pipe);
@@ -811,16 +847,19 @@ static inline __attribute__((always_inline)) int destroy_router(struct router *r
 	free(router->sock);
 
 	ret = pthread_mutex_destroy(&router->send_packet_list_lock);
-	if (ret != 0)
+	if (ret != 0) {
 		ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+	}
 
 	ret = pthread_mutex_destroy(&router->recv_packet_list_lock);
-	if (ret != 0)
+	if (ret != 0) {
 		ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+	}
 
 	ret = pthread_mutex_destroy(&router->route_list_lock);
-	if (ret != 0)
+	if (ret != 0) {
 		ErrPrint("Mutex destroy failed: %s\n", strerror(ret));
+	}
 
 	handle = router->handle;
 	free(router);
@@ -865,8 +904,9 @@ static inline int route_packet(struct router *router, int handle, struct packet 
 				 *
 				 * We have to optimize the processing time in the CRITICAL SECTION
 				 */
-				if (put_send_packet(router, route->handle, packet) < 0)
+				if (put_send_packet(router, route->handle, packet) < 0) {
 					ErrPrint("Failed to send whole packet\n");
+				}
 
 				processed++;
 			}
@@ -913,8 +953,9 @@ static int put_send_packet(struct router *router, int handle, struct packet *pac
 	 * \note
 	 * Producing an event on event pipe
 	 */
-	if (write(router->send_pipe[PIPE_WRITE], &handle, sizeof(handle)) != sizeof(handle))
+	if (write(router->send_pipe[PIPE_WRITE], &handle, sizeof(handle)) != sizeof(handle)) {
 		ErrPrint("Failed to put an event: %s\n", strerror(errno));
+	}
 
 	return 0;
 }
@@ -951,8 +992,9 @@ static inline int put_recv_packet(struct router *router, int handle, struct pack
 	 * \note
 	 * Producing an event on event pipe
 	 */
-	if (write(router->recv_pipe[PIPE_WRITE], &handle, sizeof(handle)) != sizeof(handle))
+	if (write(router->recv_pipe[PIPE_WRITE], &handle, sizeof(handle)) != sizeof(handle)) {
 		ErrPrint("Failed to put an event: %s\n", strerror(errno));
+	}
 
 	return 0;
 }
@@ -979,8 +1021,9 @@ static inline struct packet *get_send_packet(struct router *router, int *handle)
 
 	CRITICAL_SECTION_END(&router->send_packet_list_lock);
 
-	if (read(router->send_pipe[PIPE_READ], handle, sizeof(*handle)) != sizeof(*handle))
+	if (read(router->send_pipe[PIPE_READ], handle, sizeof(*handle)) != sizeof(*handle)) {
 		ErrPrint("Failed to get an event: %s\n", strerror(errno));
+	}
 
 	return packet;
 }
@@ -1003,8 +1046,9 @@ static inline struct packet *get_recv_packet(struct router *router, int *handle,
 		router->recv_packet_list = dlist_remove(router->recv_packet_list, l);
 
 		packet = item->packet;
-		if (pid)
+		if (pid) {
 			*pid = item->pid;
+		}
 
 		free(item);
 	}
@@ -1017,8 +1061,9 @@ static inline struct packet *get_recv_packet(struct router *router, int *handle,
 	 * Even if we cannot get the packet(NULL), we should consuming event
 	 * Because the NULL packet means disconnected
 	 */
-	if (read(router->recv_pipe[PIPE_READ], handle, sizeof(*handle)) != sizeof(*handle))
+	if (read(router->recv_pipe[PIPE_READ], handle, sizeof(*handle)) != sizeof(*handle)) {
 		ErrPrint("Failed to get an event: %s\n", strerror(errno));
+	}
 
 	return packet;
 }
@@ -1054,16 +1099,18 @@ static inline int build_packet(int handle, struct recv_ctx *ctx)
 		ctx->packet = packet_build(ctx->packet, ctx->offset, ptr, ret);
 		free(ptr);
 
-		if (!ctx->packet)
+		if (!ctx->packet) {
 			return -EFAULT;
+		}
 
 		ctx->offset += ret;
 
 		if (ctx->offset == packet_header_size()) {
-			if (packet_size(ctx->packet) == ctx->offset)
+			if (packet_size(ctx->packet) == ctx->offset) {
 				ctx->state = RECV_STATE_READY;
-			else
+			} else {
 				ctx->state = RECV_STATE_BODY;
+			}
 		}
 		break;
 	case RECV_STATE_BODY:
@@ -1090,12 +1137,14 @@ static inline int build_packet(int handle, struct recv_ctx *ctx)
 
 		ctx->packet = packet_build(ctx->packet, ctx->offset, ptr, ret);
 		free(ptr);
-		if (!ctx->packet)
+		if (!ctx->packet) {
 			return -EFAULT;
+		}
 
 		ctx->offset += ret;
-		if (ctx->offset == packet_size(ctx->packet))
+		if (ctx->offset == packet_size(ctx->packet)) {
 			ctx->state = RECV_STATE_READY;
+		}
 
 		break;
 	case RECV_STATE_READY:
@@ -1115,8 +1164,9 @@ static int router_common_main(struct router *router, int handle, struct recv_ctx
 		 * select event has cancel point
 		 */
 		ret = select_event(handle, ctx->timeout);
-		if (ret == -EAGAIN)
+		if (ret == -EAGAIN) {
 			continue;
+		}
 
 		if (ret < 0) {
 			packet_destroy(ctx->packet);
@@ -1139,10 +1189,11 @@ static int router_common_main(struct router *router, int handle, struct recv_ctx
 			 * If the destination address is ZERO,
 			 * Pull up the packet to this server.
 			 */
-			if (packet_destination(ctx->packet))
+			if (packet_destination(ctx->packet)) {
 				route_packet(router, handle, ctx->packet);
-			else
+			} else {
 				put_recv_packet(router, handle, ctx->packet, ctx->pid);
+			}
 
 			ctx->state = RECV_STATE_INIT;
 		}
@@ -1226,11 +1277,13 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		return FALSE;
 	}
 
-	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
-	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
 	client = calloc(1, sizeof(*client));
 	if (!client) {
@@ -1275,8 +1328,9 @@ EAPI int com_core_packet_router_server_init(const char *sock, double timeout, st
 	GIOChannel *gio;
 
 	handle = secure_socket_create_server(sock);
-	if (handle < 0)
+	if (handle < 0) {
 		return handle;
+	}
 
 	router = create_router(sock, handle, table);
 	if (!router) {
@@ -1326,8 +1380,9 @@ EAPI int com_core_packet_router_client_init(const char *sock, double timeout, st
 	int status;
 
 	handle = secure_socket_create_client(sock);
-	if (handle < 0)
+	if (handle < 0) {
 		return handle;
+	}
 
 	router = create_router(sock, handle, table);
 	if (!router) {
@@ -1398,13 +1453,15 @@ EAPI void *com_core_packet_router_server_fini(int handle)
 		router->info.server.client_list = dlist_remove(router->info.server.client_list, l);
 
 		status = pthread_cancel(client->thid);
-		if (status != 0)
+		if (status != 0) {
 			ErrPrint("Failed to cacnel a thread: %s\n", strerror(errno));
+		}
 
 		ret = NULL;
 		status = pthread_join(client->thid, &ret);
-		if (status != 0)
+		if (status != 0) {
 			ErrPrint("Failed to join a thread: %s\n", strerror(errno));
+		}
 
 		if (ret == PTHREAD_CANCELED) {
 			DbgPrint("Thread is canceled\n");
@@ -1456,12 +1513,14 @@ EAPI void *com_core_packet_router_client_fini(int handle)
 	}
 
 	status = pthread_cancel(router->info.client.thid);
-	if (status != 0)
+	if (status != 0) {
 		ErrPrint("Failed to cancel a thread: %s\n", strerror(errno));
+	}
 
 	status = pthread_join(router->info.client.thid, &ret);
-	if (status != 0)
+	if (status != 0) {
 		ErrPrint("Failed to join a thread: %s\n", strerror(errno));
+	}
 
 	if (ret == PTHREAD_CANCELED) {
 		DbgPrint("Thread is canceled\n");
@@ -1491,8 +1550,9 @@ EAPI int com_core_packet_router_async_send(int handle, struct packet *packet, do
 	struct router *router;
 	int ret;
 
-	if (handle < 0 || !packet)
+	if (handle < 0 || !packet) {
 		return -EINVAL;
+	}
 
 	if (packet_type(packet) != PACKET_REQ) {
 		ErrPrint("Invalid packet - should be PACKET_REQ\n");
@@ -1506,16 +1566,18 @@ EAPI int com_core_packet_router_async_send(int handle, struct packet *packet, do
 	}
 
 	ctx = create_request_ctx(handle);
-	if (!ctx)
+	if (!ctx) {
 		return -ENOMEM;
+	}
 
 	ctx->recv_cb = recv_cb;
 	ctx->data = data;
 	ctx->packet = packet_ref(packet);
 
 	ret = put_send_packet(router, handle, packet);
-	if (ret < 0)
+	if (ret < 0) {
 		destroy_request_ctx(ctx);
+	}
 
 	return ret;
 }
@@ -1528,8 +1590,9 @@ EAPI int com_core_packet_router_send_only(int handle, struct packet *packet)
 {
 	struct router *router;
 
-	if (handle < 0 || !packet || packet_type(packet) != PACKET_REQ_NOACK)
+	if (handle < 0 || !packet || packet_type(packet) != PACKET_REQ_NOACK) {
 		return -EINVAL;
+	}
 
 	router = find_router_by_handle(handle);
 	if (!router) {
@@ -1561,8 +1624,9 @@ EAPI int com_core_packet_router_add_route(int handle, unsigned long address, int
 	struct dlist *l;
 	int found = 0;
 
-	if (handle < 0 || !address || h < 0)
+	if (handle < 0 || !address || h < 0) {
 		return -EINVAL;
+	}
 
 	router = find_router_by_handle(handle);
 	if (!router) {
@@ -1589,8 +1653,9 @@ EAPI int com_core_packet_router_add_route(int handle, unsigned long address, int
 		}
 	}
 
-	if (!found)
+	if (!found) {
 		router->route_list = dlist_append(router->route_list, route);
+	}
 
 	CRITICAL_SECTION_END(&router->route_list_lock);
 
@@ -1614,8 +1679,9 @@ EAPI int com_core_packet_router_del_route(int handle, unsigned long address)
 	struct dlist *n;
 	int found = 0;
 
-	if (handle < 0 || !address)
+	if (handle < 0 || !address) {
 		return -EINVAL;
+	}
 
 	router = find_router_by_handle(handle);
 	if (!router) {
@@ -1626,8 +1692,9 @@ EAPI int com_core_packet_router_del_route(int handle, unsigned long address)
 	CRITICAL_SECTION_BEGIN(&router->route_list_lock);
 
 	dlist_foreach_safe(router->route_list, l, n, route) {
-		if (route->address != address)
+		if (route->address != address) {
 			continue;
+		}
 
 		router->route_list = dlist_remove(router->route_list, l);
 
@@ -1654,8 +1721,9 @@ EAPI int com_core_packet_router_update_route(int handle, unsigned long address, 
 	struct dlist *l;
 	int found = 0;
 
-	if (handle < 0 || !address || h < 0)
+	if (handle < 0 || !address || h < 0) {
 		return -EINVAL;
+	}
 
 	router = find_router_by_handle(handle);
 	if (!router) {
@@ -1666,8 +1734,9 @@ EAPI int com_core_packet_router_update_route(int handle, unsigned long address, 
 	CRITICAL_SECTION_BEGIN(&router->route_list_lock);
 
 	dlist_foreach(router->route_list, l, route) {
-		if (route->address != address)
+		if (route->address != address) {
 			continue;
+		}
 
 		route->handle = h;
 		route->invalid = 0;

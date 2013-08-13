@@ -142,8 +142,9 @@ static inline struct recv_ctx *find_recv_ctx(int handle)
 	struct dlist *l;
 
 	dlist_foreach(s_info.recv_list, l, ctx) {
-		if (ctx->handle == handle)
+		if (ctx->handle == handle) {
 			return ctx;
+		}
 	}
 
 	return NULL;
@@ -206,8 +207,9 @@ static inline int packet_ready(int handle, const struct recv_ctx *receive, struc
 		break;
 	case PACKET_REQ:
 		for (i = 0; table[i].cmd; i++) {
-			if (strcmp(table[i].cmd, packet_command(receive->packet)))
+			if (strcmp(table[i].cmd, packet_command(receive->packet))) {
 				continue;
+			}
 
 			result = table[i].handler(receive->pid, handle, receive->packet);
 			if (result) {
@@ -225,12 +227,14 @@ static inline int packet_ready(int handle, const struct recv_ctx *receive, struc
 		break;
 	case PACKET_REQ_NOACK:
 		for (i = 0; table[i].cmd; i++) {
-			if (strcmp(table[i].cmd, packet_command(receive->packet)))
+			if (strcmp(table[i].cmd, packet_command(receive->packet))) {
 				continue;
+			}
 
 			result = table[i].handler(receive->pid, handle, receive->packet);
-			if (result)
+			if (result) {
 				packet_destroy(result);
+			}
 		}
 		break;
 	default:
@@ -253,28 +257,32 @@ static int client_disconnected_cb(int handle, void *data)
 	int referred = 0;
 
 	receive = find_recv_ctx(handle);
-	if (receive)
+	if (receive) {
 		pid = receive->pid;
+	}
 
 	DbgPrint("Clean up all requests and a receive context for handle(%d) for pid(%d)\n", handle, pid);
 
 	dlist_foreach_safe(s_info.request_list, l, n, request) {
-		if (request->handle != handle)
+		if (request->handle != handle) {
 			continue;
+		}
 
 		if (request->in_recv) {
 			referred = 1;
 			continue;
 		}
 
-		if (request->recv_cb)
+		if (request->recv_cb) {
 			request->recv_cb(pid, handle, NULL, request->data);
+		}
 
 		destroy_request_ctx(request);
 	}
 
-	if (receive && !referred)
+	if (receive && !referred) {
 		destroy_recv_ctx(receive);
+	}
 
 	return 0;
 }
@@ -336,10 +344,11 @@ static int service_cb(int handle, void *data)
 			receive->offset += ret;
 
 			if (receive->offset == packet_header_size()) {
-				if (packet_size(receive->packet) == receive->offset)
+				if (packet_size(receive->packet) == receive->offset) {
 					receive->state = RECV_STATE_READY;
-				else
+				} else {
 					receive->state = RECV_STATE_BODY;
+				}
 			}
 		} else {
 			DbgPrint("ZERO bytes receives(%d)\n", pid);
@@ -402,8 +411,9 @@ static int service_cb(int handle, void *data)
 
 	if (receive->state == RECV_STATE_READY) {
 		ret = packet_ready(handle, receive, data);
-		if (ret == 0)
+		if (ret == 0) {
 			destroy_recv_ctx(receive);
+		}
 		/*!
 		 * if ret is negative value, disconnected_cb will be called after this function
 		 */
@@ -430,8 +440,9 @@ EAPI int com_core_packet_async_send(int handle, struct packet *packet, double ti
 	}
 
 	ctx = create_request_ctx(handle);
-	if (!ctx)
+	if (!ctx) {
 		return -ENOMEM;
+	}
 
 	ctx->recv_cb = recv_cb;
 	ctx->data = data;
@@ -481,18 +492,22 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	}
 
 	fd = secure_socket_create_client(addr);
-	if (fd < 0)
+	if (fd < 0) {
 		return NULL;
+	}
 
-	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("fcntl: %s\n", strerror(errno));
+	}
 
-	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+	if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
 	ret = com_core_send(fd, (char *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
-	if (ret < 0)
+	if (ret < 0) {
 		goto out;
+	}
 
 	ptr = malloc(packet_header_size());
 	if (!ptr) {
@@ -559,8 +574,9 @@ out:
 static inline int com_core_packet_init(void)
 {
 	int ret;
-	if (s_info.initialized)
+	if (s_info.initialized) {
 		return 0;
+	}
 
 	ret = com_core_add_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
 	s_info.initialized = (ret == 0);
@@ -569,8 +585,9 @@ static inline int com_core_packet_init(void)
 
 static inline int com_core_packet_fini(void)
 {
-	if (!s_info.initialized)
+	if (!s_info.initialized) {
 		return 0;
+	}
 
 	s_info.initialized = 0;
 	com_core_del_event_callback(CONNECTOR_DISCONNECTED, client_disconnected_cb, NULL);
@@ -582,12 +599,14 @@ EAPI int com_core_packet_client_init(const char *addr, int is_sync, struct metho
 	int ret;
 
 	ret = com_core_packet_init();
-	if (ret < 0)
+	if (ret < 0) {
 		return ret;
+	}
 
 	ret = s_info.vtable.client_create(addr, is_sync, service_cb, table);
-	if (ret < 0)
+	if (ret < 0) {
 		com_core_packet_fini();
+	}
 
 	return ret;
 }
@@ -604,12 +623,14 @@ EAPI int com_core_packet_server_init(const char *addr, struct method *table)
 	int ret;
 
 	ret = com_core_packet_init();
-	if (ret < 0)
+	if (ret < 0) {
 		return ret;
+	}
 
 	ret = s_info.vtable.server_create(addr, 0, service_cb, table);
-	if (ret < 0)
+	if (ret < 0) {
 		com_core_packet_fini();
+	}
 
 	return ret;
 }
