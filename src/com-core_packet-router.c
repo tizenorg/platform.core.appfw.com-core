@@ -140,11 +140,11 @@ static struct info {
 	.error_list = NULL,
 };
 
-static inline struct packet *get_recv_packet(struct router *router, int *handle, pid_t *pid);
-static inline int put_recv_packet(struct router *router, int handle, struct packet *packet, pid_t pid);
+static struct packet *get_recv_packet(struct router *router, int *handle, pid_t *pid);
+static int put_recv_packet(struct router *router, int handle, struct packet *packet, pid_t pid);
 
-static inline struct packet *get_send_packet(struct router *router, int *handle);
-static inline int put_send_packet(struct router *router, int handle, struct packet *packet);
+static struct packet *get_send_packet(struct router *router, int *handle);
+static int put_send_packet(struct router *router, int handle, struct packet *packet);
 
 /*!
  * \note
@@ -964,7 +964,7 @@ static int put_send_packet(struct router *router, int handle, struct packet *pac
  * \NOTE
  * Running thread: Client / Server leaf thread
  */
-static inline int put_recv_packet(struct router *router, int handle, struct packet *packet, pid_t pid)
+static int put_recv_packet(struct router *router, int handle, struct packet *packet, pid_t pid)
 {
 	/*!
 	 * If a packet is NULL, the connection is terminated
@@ -1003,7 +1003,7 @@ static inline int put_recv_packet(struct router *router, int handle, struct pack
  * \NOTE
  * Running thread: Send thread
  */
-static inline struct packet *get_send_packet(struct router *router, int *handle)
+static struct packet *get_send_packet(struct router *router, int *handle)
 {
 	struct packet *packet = NULL;
 	struct dlist *l;
@@ -1032,7 +1032,7 @@ static inline struct packet *get_send_packet(struct router *router, int *handle)
  * \NOTE
  * Running thread: Main thread
  */
-static inline struct packet *get_recv_packet(struct router *router, int *handle, pid_t *pid)
+static struct packet *get_recv_packet(struct router *router, int *handle, pid_t *pid)
 {
 	struct packet *packet = NULL;
 	struct dlist *l;
