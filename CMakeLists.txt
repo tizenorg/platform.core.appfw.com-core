@@ -17,6 +17,7 @@ INCLUDE(FindPkgConfig)
 pkg_check_modules(pkgs REQUIRED
 	glib-2.0
 	dlog
+	libsystemd-daemon
 )
 
 FOREACH(flag ${pkgs_CFLAGS})

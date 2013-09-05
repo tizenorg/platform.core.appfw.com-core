@@ -2,24 +2,25 @@ Name: libcom-core
 Summary: Library for the light-weight IPC 
 Version: 0.3.14
 Release: 1
-Group: HomeTF/Framework
-License: Apache License
+Group: Base/IPC
+License: Apache-2.0
 Source0: %{name}-%{version}.tar.gz
 Source1001: 	libcom-core.manifest
 BuildRequires: cmake, gettext-tools, coreutils
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(glib-2.0)
+BuildRequires: pkgconfig(libsystemd-daemon)
 
 %description
-Light-weight IPC supporting library
+Light-weight IPC supporting library for Tizen
 
 %package devel
-Summary: Files for using API for light-weight IPC.
+Summary: Files for using API for light-weight IPC
 Group: Development/Libraries
 Requires: %{name} = %{version}-%{release}
 
 %description devel
-Light-weight IPC supporting library (dev)
+Light-weight IPC supporting library for Tizen (dev)
 
 %prep
 %setup -q
@@ -34,7 +35,9 @@ rm -rf %{buildroot}
 %make_install
 mkdir -p %{buildroot}/%{_datarootdir}/license
 
-%post
+%post -n libcom-core -p /sbin/ldconfig
+
+%postun -n libcom-core -p /sbin/ldconfig
 
 %files -n libcom-core
 %manifest %{name}.manifest

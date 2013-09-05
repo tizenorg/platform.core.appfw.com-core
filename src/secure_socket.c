@@ -26,6 +26,7 @@
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <errno.h>
+#include <systemd/sd-daemon.h>
 
 #include <dlog.h>
 
@@ -100,33 +101,42 @@ EAPI int secure_socket_create_server(const char *peer)
 {
 	int handle;
 	int state;
+	int num;
 	struct sockaddr_un addr;
 
-	handle = create_socket(peer, &addr);
-	if (handle < 0)
-		return handle;
+	num = sd_listen_fds(0);
+	if (num > 1) {
+            ErrPrint("Too many file descriptors recieved on socket activation.\n");
+            return -1;
+    	} else if (num == 1) {
+            handle = SD_LISTEN_FDS_START + 0;
+    	} else {
+            handle = create_socket(peer, &addr);
+            if (handle < 0)
+                return handle;
 
-	state = bind(handle, &addr, sizeof(addr));
-	if (state < 0) {
-		state = -errno;
+            state = bind(handle, &addr, sizeof(addr));
+            if (state < 0) {
+                state = -errno;
 
-		ErrPrint("Failed to bind a socket %s\n", strerror(errno));
-		if (close(handle) < 0)
-			ErrPrint("Close a handle : %s\n", strerror(errno));
+                ErrPrint("Failed to bind a socket %s\n", strerror(errno));
+                if (close(handle) < 0)
+                    ErrPrint("Close a handle : %s\n", strerror(errno));
 
-		return state;
-	}
+                return state;
+            }
 
-	state = listen(handle, BACKLOG);
-	if (state < 0) {
-		state = -errno;
-		ErrPrint("Failed to listen a socket %s\n", strerror(errno));
+            state = listen(handle, BACKLOG);
+            if (state < 0) {
+                state = -errno;
+                ErrPrint("Failed to listen a socket %s\n", strerror(errno));
 
-		if (close(handle) < 0)
-			ErrPrint("Close a handle : %s\n", strerror(errno));
+                if (close(handle) < 0)
+                    ErrPrint("Close a handle : %s\n", strerror(errno));
 
-		return state;
-	}
+                return state;
+            }
+        }
 
 	if (chmod(peer, 0666) < 0)
 		ErrPrint("Failed to change the permission of a socket (%s)\n",
