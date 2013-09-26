@@ -364,7 +364,6 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 	struct packet *packet;
 	int payload_size;
 	va_list va;
-	struct timeval tv;
 
 	if (strlen(cmd) >= PACKET_MAX_CMD) {
 		ErrPrint("Command is too long\n");
@@ -388,11 +387,10 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 	}
 
 	packet->state = VALID;
-	gettimeofday(&tv, NULL);
 	packet->data->head.source = 0lu;
 	packet->data->head.destination = 0lu;
 	packet->data->head.mask = 0xFFFFFFFF;
-	packet->data->head.seq = tv.tv_sec + tv.tv_usec / 1000000.0f;
+	packet->data->head.seq = util_timestamp();
 	packet->data->head.type = PACKET_REQ;
 	packet->data->head.version = PACKET_VERSION;
 	strncpy(packet->data->head.command, cmd, sizeof(packet->data->head.command));
@@ -411,7 +409,6 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 	int payload_size;
 	struct packet *result;
 	va_list va;
-	struct timeval tv;
 
 	if (strlen(cmd) >= PACKET_MAX_CMD) {
 		ErrPrint("Command is too long\n");
@@ -435,11 +432,10 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 	}
 
 	result->state = VALID;
-	gettimeofday(&tv, NULL);
 	result->data->head.source = 0lu;
 	result->data->head.destination = 0lu;
 	result->data->head.mask = 0xFFFFFFFF;
-	result->data->head.seq = tv.tv_sec + tv.tv_usec / 1000000.0f;
+	result->data->head.seq = util_timestamp();
 	result->data->head.type = PACKET_REQ_NOACK;
 	result->data->head.version = PACKET_VERSION;
 	strncpy(result->data->head.command, cmd, sizeof(result->data->head.command));
