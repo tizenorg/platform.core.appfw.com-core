@@ -16,6 +16,7 @@
 */
 
 extern const char *util_basename(const char *name);
+extern double util_timestamp(void);
 
 #define CRITICAL_SECTION_BEGIN(handle) \
 do { \

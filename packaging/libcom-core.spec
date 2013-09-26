@@ -1,6 +1,6 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.5.2
+Version: 0.5.3
 Release: 1
 Group: HomeTF/Framework
 License: Apache License
