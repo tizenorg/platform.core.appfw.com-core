@@ -16,6 +16,7 @@
 */
 
 extern const char *util_basename(const char *name);
+extern double util_timestamp(void);
 
 #define CRITICAL_SECTION_BEGIN(handle) \
 do { \
@@ -32,5 +33,19 @@ do { \
 	if (ret != 0) \
 		ErrPrint("Failed to unlock: %s\n", strerror(ret)); \
 } while (0)
+
+#define CLOSE_PIPE(p)	do { \
+	int status; \
+	status = close(p[PIPE_READ]); \
+	if (status < 0) \
+		ErrPrint("close: %s\n", strerror(errno)); \
+	status = close(p[PIPE_WRITE]); \
+	if (status < 0) \
+		ErrPrint("close: %s\n", strerror(errno)); \
+} while (0)
+
+#define PIPE_READ 0
+#define PIPE_WRITE 1
+#define PIPE_MAX 2
 
 /* End of a file */
