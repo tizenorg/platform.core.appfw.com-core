@@ -134,25 +134,26 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	}
 
 	if ((cond & G_IO_ERR) || (cond & G_IO_HUP) || (cond & G_IO_NVAL)) {
-		DbgPrint("Client connection is lost\n");
+		ErrPrint("Client connection is lost\n");
 		secure_socket_destroy_handle(socket_fd);
 		free(cbdata);
 		return FALSE;
 	}
 
-	DbgPrint("New connectino arrived: socket(%d)\n", socket_fd);
 	client_fd = secure_socket_get_connection_handle(socket_fd);
 	if (client_fd < 0) {
 		free(cbdata);
 		return FALSE;
 	}
-	DbgPrint("New client: %d\n", client_fd);
+	DbgPrint("New connectino arrived: server(%d), client(%d)\n", socket_fd, client_fd);
 
-	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
-	if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0)
+	if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
 	gio = g_io_channel_unix_new(client_fd);
 	if (!gio) {
@@ -182,7 +183,6 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	g_io_channel_unref(gio);
 
 	invoke_con_cb_list(client_fd);
-	DbgPrint("New client is connected with %d\n", client_fd);
 	return TRUE;
 }
 
@@ -208,13 +208,15 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
 		return fd;
 	}
 
-	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("fcntl: %s\n", strerror(errno));
+	}
 
-	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0)
+	if (!is_sync && fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("fcntl: %s\n", strerror(errno));
+	}
 
-	DbgPrint("Create new IO channel for socket FD: %d\n", fd);
+	DbgPrint("Create new IO channel for server FD: %d\n", fd);
 	gio = g_io_channel_unix_new(fd);
 	if (!gio) {
 		ErrPrint("Failed to create new io channel\n");
@@ -266,11 +268,13 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 		return client_fd;
 	}
 
-	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0)
+	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
-	if (!is_sync && fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0)
+	if (!is_sync && fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
 
 	gio = g_io_channel_unix_new(client_fd);
 	if (!gio) {
@@ -314,10 +318,11 @@ EAPI int com_core_add_event_callback(enum com_core_event_type type, int (*evt_cb
 	cbdata->evt_cb = evt_cb;
 	cbdata->data = data;
 
-	if (type == CONNECTOR_CONNECTED)
+	if (type == CONNECTOR_CONNECTED) {
 		s_info.conn_cb_list = dlist_append(s_info.conn_cb_list, cbdata);
-	else
+	} else {
 		s_info.disconn_cb_list = dlist_append(s_info.disconn_cb_list, cbdata);
+	}
 	return 0;
 }
 
@@ -483,6 +488,7 @@ EAPI void *com_core_del_event_callback(enum com_core_event_type type, int (*cb)(
 EAPI int com_core_server_destroy(int handle)
 {
 	DbgPrint("Close server handle[%d]\n", handle);
+	invoke_disconn_cb_list(handle);
 	secure_socket_destroy_handle(handle);
 	return 0;
 }
@@ -490,6 +496,7 @@ EAPI int com_core_server_destroy(int handle)
 EAPI int com_core_client_destroy(int handle)
 {
 	DbgPrint("Close client handle[%d]\n", handle);
+	invoke_disconn_cb_list(handle);
 	secure_socket_destroy_handle(handle);
 	return 0;
 }

@@ -17,19 +17,19 @@ INCLUDE(FindPkgConfig)
 pkg_check_modules(pkgs REQUIRED
 	glib-2.0
 	dlog
-	libsystemd-daemon
 )
 
 FOREACH(flag ${pkgs_CFLAGS})
 	SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} ${flag}")
 ENDFOREACH(flag)
 
-SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} -fvisibility=hidden -g -Wall -Winline")
+SET(EXTRA_CFLAGS "${EXTRA_CFLAGS} -fvisibility=hidden -g -Wall -Werror -Winline")
 SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_CFLAGS}")
 
 ADD_DEFINITIONS("-DPREFIX=\"${PREFIX}\"")
 ADD_DEFINITIONS("-DLOG_TAG=\"COM_CORE\"")
 ADD_DEFINITIONS("-DNDEBUG")
+ADD_DEFINITIONS("-D_USE_ECORE_TIME_GET")
 
 ADD_LIBRARY(${PROJECT_NAME} SHARED
 	src/dlist.c
