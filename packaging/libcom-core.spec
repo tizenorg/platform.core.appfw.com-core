@@ -1,6 +1,6 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.3.14
+Version: 0.5.3
 Release: 1
 Group: Base/IPC
 License: Apache-2.0
@@ -27,7 +27,13 @@ Light-weight IPC supporting library for Tizen (dev)
 cp %{SOURCE1001} .
 
 %build
-%cmake
+%if 0%{?tizen_build_binary_release_type_eng}
+export CFLAGS="${CFLAGS} -DTIZEN_ENGINEER_MODE"
+export CXXFLAGS="${CXXFLAGS} -DTIZEN_ENGINEER_MODE"
+export FFLAGS="${FFLAGS} -DTIZEN_ENGINEER_MODE"
+%endif
+
+cmake . -DCMAKE_INSTALL_PREFIX=%{_prefix}
 make %{?jobs:-j%jobs}
 
 %install

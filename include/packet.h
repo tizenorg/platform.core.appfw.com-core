@@ -28,14 +28,14 @@ enum packet_type {
 	PACKET_REQ,
 	PACKET_ACK,
 	PACKET_REQ_NOACK,
-	PACKET_ERROR,
+	PACKET_ERROR
 };
 
 enum packet_flag {
 	PACKET_FLAG_NOROUTE = 0x00, /*!< If possible, route this packet without care of the server */
 	PACKET_FLAG_ROUTE = 0x01, /*!< This packet must has to be cared by the server */
 
-	PACKET_FLAG_ERROR = 0xFF, /*!< Invalid flag */
+	PACKET_FLAG_ERROR = 0xFF /*!< Invalid flag */
 };
 
 #define PACKET_VERSION	2
