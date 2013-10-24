@@ -29,6 +29,7 @@
 #include <netinet/tcp.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <systemd/sd-daemon.h>
 
 #include <dlog.h>
 
@@ -107,6 +108,23 @@ static inline int create_inet_socket(const char *peer, int port, struct sockaddr
 	return handle;
 }
 
+static inline int create_systemd_socket(const char *peer, int port, struct sockaddr *addr)
+{
+	int handle = -1;
+	int cnt;
+
+	cnt = sd_listen_fds(0);
+	if (cnt > 1) {
+		ErrPrint("To many file descriptors are received on socket activation: %d\n", cnt);
+	} else if (cnt == 1) {
+		handle = SD_LISTEN_FDS_START + 0;
+	} else {
+		handle = create_inet_socket(peer, port, addr);
+	}
+
+	return handle;
+}
+
 static inline int setup_unix_handle(int handle)
 {
 	int on = 1;
@@ -156,6 +174,17 @@ static inline char *parse_scheme(const char *peer, int *port, struct function_ta
 		}
 
 		vtable->create_socket = create_unix_socket;
+		vtable->setup_handle = setup_unix_handle;
+	} else if (!strncasecmp(peer, COM_CORE_SD_LOCAL_SCHEME, COM_CORE_SD_LOCAL_SCHEME_LEN)) {
+		vtable->type = (int)SCHEME_LOCAL;
+		peer += COM_CORE_SD_LOCAL_SCHEME_LEN;
+
+		addr = strdup(peer);
+		if (!addr) {
+			ErrPrint("Heap: %s\n", strerror(errno));
+		}
+
+		vtable->create_socket = create_systemd_socket;
 		vtable->setup_handle = setup_unix_handle;
 	} else if (!strncasecmp(peer, COM_CORE_REMOTE_SCHEME, COM_CORE_REMOTE_SCHEME_LEN)) {
 		register int len;
