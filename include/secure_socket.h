@@ -29,6 +29,12 @@ extern "C" {
 #define COM_CORE_LOCAL_SCHEME_LEN	(8)
 
 /*!
+ * sdlocal:///tmp/.socket.file => /tmp/.socket.file
+ */
+#define COM_CORE_SD_LOCAL_SCHEME	"sdlocal://"
+#define COM_CORE_SD_LOCAL_SCHEME_LEN	(10)
+
+/*!
  * remote://IPADDR:PORT
  * remote://:PORT	=> Using INADDR_ANY in this case
  */
