@@ -159,9 +159,9 @@ static inline void terminate_thread(struct tcb *tcb)
 	status = pthread_join(tcb->thid, &res);
 	if (status != 0) {
 		ErrPrint("Join: %s\n", strerror(status));
-	}
-	else
+	} else {
 		ErrPrint("Thread returns: %d\n", (int)res);
+	}
 
 	dlist_foreach_safe(tcb->chunk_list, l, n, chunk) {
 		/*!
@@ -402,7 +402,7 @@ static void *client_cb(void *data)
 		ErrPrint("write: %s\n", strerror(errno));
 	}
 
-	return (void *)ret;
+	return (void *)(unsigned long)ret;
 }
 
 /*!

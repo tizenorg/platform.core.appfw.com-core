@@ -585,7 +585,7 @@ static void *send_main(void *data)
 		packet_destroy(packet);
 	}
 
-	return (void *)ret;
+	return (void *)(unsigned long)ret;
 }
 
 /*!
@@ -1220,7 +1220,7 @@ static void *server_main(void *data)
 	ctx.pid = (pid_t)-1;
 
 	ret = router_common_main(router, client->handle, &ctx);
-	return (void *)ret;
+	return (void *)(unsigned long)ret;
 }
 
 /*!
@@ -1240,7 +1240,7 @@ static void *client_main(void *data)
 	ctx.pid = (pid_t)-1;
 
 	ret = router_common_main(router, router->handle, &ctx);
-	return (void *)ret;
+	return (void *)(unsigned long)ret;
 }
 
 /*!

@@ -1,0 +1,9 @@
+* Thu Sep 05 2013 Rusty Lynch <rusty.lynch@intel.com> accepted/tizen/20130710.221527@99bbffd
+- Add systemd socket activation support for secure sockets
+
+* Thu Sep 05 2013 Rusty Lynch <rusty.lynch@intel.com> accepted/tizen/20130710.221527@99bbffd
+- Add systemd socket activation support for secure sockets
+
+* Wed May 29 2013 Xavier Roche <xavrock.os@gmail.com> accepted/tizen/20130520.100914@a1a091c
+- Fix x86_64 build-install compliance
+
