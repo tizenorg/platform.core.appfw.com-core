@@ -1,6 +1,6 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.5.3
+Version: 0.5.4
 Release: 1
 Group: Base/IPC
 License: Apache-2.0
@@ -26,6 +26,12 @@ Light-weight IPC supporting library for Tizen (dev)
 cp %{SOURCE1001} .
 
 %build
+%if 0%{?sec_build_binary_debug_enable}
+export CFLAGS="$CFLAGS -DTIZEN_DEBUG_ENABLE"
+export CXXFLAGS="$CXXFLAGS -DTIZEN_DEBUG_ENABLE"
+export FFLAGS="$FFLAGS -DTIZEN_DEBUG_ENABLE"
+%endif
+
 %if 0%{?tizen_build_binary_release_type_eng}
 export CFLAGS="${CFLAGS} -DTIZEN_ENGINEER_MODE"
 export CXXFLAGS="${CXXFLAGS} -DTIZEN_ENGINEER_MODE"
