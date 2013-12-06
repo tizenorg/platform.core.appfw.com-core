@@ -1,0 +1,9 @@
+Code-Review+2: Patrick McCarty <patrick.mccarty@linux.intel.com>
+Code-Review+1: ronan Le Martret <ronan@fridu.net>
+Verified+1: ronan Le Martret <ronan@fridu.net>
+Verified+1: Stéphane Desneux
+Submitted-by: Patrick McCarty <patrick.mccarty@linux.intel.com>
+Submitted-at: Thu, 05 Dec 2013 21:25:00 -0800
+Reviewed-on: https://review.tizen.org/gerrit/12496
+Project: platform/core/appfw/com-core
+Branch: refs/heads/tizen
