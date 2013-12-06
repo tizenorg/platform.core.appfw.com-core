@@ -1,3 +1,9 @@
+* Sat Nov 16 2013 Stephane Desneux <stephane.desneux@eurogiciel.fr> ceffb37
+- Fix build for x86_64: set LIBDIR to ${LIB_INSTALL_DIR} in CMakeLists.txt (PTREL-399)
+
+* Thu Oct 24 2013 Rusty Lynch <rusty.lynch@intel.com> 1f49db8
+- Restore use of %cmake macro (PTREL-142)
+
 * Thu Sep 05 2013 Rusty Lynch <rusty.lynch@intel.com> accepted/tizen/20130710.221527@99bbffd
 - Add systemd socket activation support for secure sockets
 
