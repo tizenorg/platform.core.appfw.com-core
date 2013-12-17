@@ -104,7 +104,7 @@ static ssize_t write_safe(int fd, const void *data, size_t bufsz)
 				ErrPrint("Interrupted[%d] Again[%d]\n", fd, -ret);
 				break;
 			default:
-				ErrPrint("Failed to write: %s\n", strerror(-ret));
+				ErrPrint("Failed to write: %s (%d)\n", strerror(-ret), -ret);
 				return ret;
 			}
 		}
@@ -342,7 +342,6 @@ static void *client_cb(void *data)
 	int readsize;
 	char event_ch;
 	int fd;
-	int w_ret;
 
 	DbgPrint("Thread is created for %d (server: %d)\n", tcb->handle, tcb->server_handle);
 	/*!
@@ -426,6 +425,7 @@ static void *client_cb(void *data)
 		 */
 		if (chunk_append(tcb, chunk) < 0) {
 			destroy_chunk(chunk);
+			break;
 		}
 	}
 
