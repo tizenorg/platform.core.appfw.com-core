@@ -87,6 +87,32 @@ struct tcb {
 	void *data;
 };
 
+static ssize_t write_safe(int fd, const void *data, size_t bufsz)
+{
+	int ret;
+	int again;
+
+	do {
+		again = 0;
+		ret = write(fd, data, bufsz);
+		if (ret < 0) {
+			ret = -errno;
+			switch (ret) {
+			case -EAGAIN:
+			case -EINTR:
+				again = 1;
+				ErrPrint("Interrupted[%d] Again[%d]\n", fd, -ret);
+				break;
+			default:
+				ErrPrint("Failed to write: %s (%d)\n", strerror(-ret), -ret);
+				return ret;
+			}
+		}
+	} while (again);
+
+	return ret;
+}
+
 /*!
  * \NOTE
  * Running thread: Main
@@ -150,8 +176,8 @@ static inline void terminate_thread(struct tcb *tcb)
 	void *res = NULL;
 	struct chunk *chunk;
 
-	if (write(tcb->ctrl_pipe[PIPE_WRITE], &tcb, sizeof(tcb)) != sizeof(tcb)) {
-		ErrPrint("Unable to write CTRL pipe\n");
+	if (write_safe(tcb->ctrl_pipe[PIPE_WRITE], &tcb, sizeof(tcb)) != sizeof(tcb)) {
+		ErrPrint("Unable to write CTRL pipe (%d)\n", sizeof(tcb));
 	}
 
 	secure_socket_destroy_handle(tcb->handle);
@@ -200,7 +226,7 @@ static inline void chunk_remove(struct tcb *tcb, struct chunk *chunk)
  * \NOTE
  * Running thread: Other
  */
-static inline void chunk_append(struct tcb *tcb, struct chunk *chunk)
+static inline int chunk_append(struct tcb *tcb, struct chunk *chunk)
 {
 	char event_ch = EVENT_READY;
 	int ret;
@@ -211,10 +237,14 @@ static inline void chunk_append(struct tcb *tcb, struct chunk *chunk)
 
 	CRITICAL_SECTION_END(&tcb->chunk_lock);
 
-	ret = write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch));
+	ret = write_safe(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch));
 	if (ret < 0) {
-		ErrPrint("write: %s\n", strerror(errno));
-		return;
+		CRITICAL_SECTION_BEGIN(&tcb->chunk_lock);
+
+		dlist_remove_data(tcb->chunk_list, chunk);
+
+		CRITICAL_SECTION_END(&tcb->chunk_lock);
+		return ret;
 	}
 
 	if (ret != sizeof(event_ch)) {
@@ -223,6 +253,7 @@ static inline void chunk_append(struct tcb *tcb, struct chunk *chunk)
 
 	/* Take a breathe */
 	pthread_yield();
+	return 0;
 }
 
 /*!
@@ -392,14 +423,18 @@ static void *client_cb(void *data)
 		/*!
 		 * Count of chunk elements are same with PIPE'd data
 		 */
-		chunk_append(tcb, chunk);
+		if (chunk_append(tcb, chunk) < 0) {
+			destroy_chunk(chunk);
+			break;
+		}
 	}
 
 	DbgPrint("Client CB is terminated (%d)\n", tcb->handle);
 	/* Wake up main thread to get disconnected event */
 	event_ch = EVENT_TERM;
-	if (write(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch)) != sizeof(event_ch)) {
-		ErrPrint("write: %s\n", strerror(errno));
+
+	if (write_safe(tcb->evt_pipe[PIPE_WRITE], &event_ch, sizeof(event_ch)) != sizeof(event_ch)) {
+		ErrPrint("%d byte is not written\n", sizeof(event_ch));
 	}
 
 	return (void *)(unsigned long)ret;
