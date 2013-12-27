@@ -536,7 +536,7 @@ static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_c
 		return NULL;
 	}
 
-	if (pipe2(tcb->evt_pipe, (is_sync ? 0 : O_NONBLOCK) | O_CLOEXEC) < 0) {
+	if (pipe2(tcb->evt_pipe, O_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
 		status = pthread_mutex_destroy(&tcb->chunk_lock);
 		if (status != 0) {
@@ -546,7 +546,7 @@ static inline struct tcb *tcb_create(int client_fd, int is_sync, int (*service_c
 		return NULL;
 	}
 
-	if (pipe2(tcb->ctrl_pipe, O_NONBLOCK | O_CLOEXEC) < 0) {
+	if (pipe2(tcb->ctrl_pipe, O_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
 
 		CLOSE_PIPE(tcb->evt_pipe);
