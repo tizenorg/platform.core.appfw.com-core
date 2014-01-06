@@ -23,6 +23,10 @@
 #define SECURE_LOGE LOGE
 #endif
 
+#if !defined(SECURE_LOGW)
+#define SECURE_LOGW LOGW
+#endif
+
 #if !defined(FLOG)
 #define DbgPrint(format, arg...)	SECURE_LOGD(format, ##arg)
 #define ErrPrint(format, arg...)	SECURE_LOGE(format, ##arg)

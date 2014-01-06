@@ -5,10 +5,11 @@ Release: 1
 Group: Base/IPC
 License: Apache-2.0
 Source0: %{name}-%{version}.tar.gz
-Source1001:	libcom-core.manifest
+Source1001: 	%{name}.manifest
 BuildRequires: cmake, gettext-tools, coreutils
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(glib-2.0)
+BuildRequires: pkgconfig(libsystemd-daemon)
 
 %description
 Light-weight IPC supporting library for Tizen
