@@ -404,16 +404,13 @@ static void *client_cb(void *data)
 
 		ret = secure_socket_recv(tcb->handle, chunk->data, chunk->size, &chunk->pid);
 		if (ret <= 0) {
-			int chunk_size;
-
-			chunk_size = chunk->size;
-
 			destroy_chunk(chunk);
 			if (ret == -EAGAIN) {
-				DbgPrint("Retry to get data (%d)\n", chunk_size);
+				DbgPrint("Retry to get data\n");
 				continue;
 			}
-			DbgPrint("Recv returns: %d (req.size: %d)\n", ret, chunk_size);
+
+			DbgPrint("Recv returns: %d\n", ret);
 			break;
 		}
 

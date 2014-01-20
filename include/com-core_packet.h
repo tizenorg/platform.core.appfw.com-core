@@ -27,13 +27,101 @@ struct method {
 	struct packet *(*handler)(pid_t pid, int handle, const struct packet *packet);
 };
 
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
+ * \param[in] handle
+ * \param[in] packet
+ * \param[in] timeout
+ * \param[in] recv_cb
+ * \param[in] data
+ * \return int
+ * \retval
+ * \sa
+ */
 extern int com_core_packet_async_send(int handle, struct packet *packet, double timeout, int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data), void *data);
+
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
+ * \param[in] handle
+ * \param[in] packet
+ * \return int
+ * \retval
+ * \sa
+ */
 extern int com_core_packet_send_only(int handle, struct packet *packet);
+
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
+ * \param[in] addr
+ * \param[in] packet
+ * \param[in] timeout
+ * \return struct packet *
+ * \retval
+ * \sa
+ */
 extern struct packet *com_core_packet_oneshot_send(const char *addr, struct packet *packet, double timeout);
+
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
+ * \param[in] addr
+ * \param[in] is_sync
+ * \param[in] table
+ * \return int
+ * \retval
+ * \sa
+ */
 extern int com_core_packet_client_init(const char *addr, int is_sync, struct method *table);
+
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
+ * \param[in] handle
+ * \return int
+ * \retval
+ * \sa
+ */
 extern int com_core_packet_client_fini(int handle);
+
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
+ * \param[in] addr
+ * \param[in] table
+ * \return int
+ * \retval
+ * \sa
+ */
 extern int com_core_packet_server_init(const char *addr, struct method *table);
+
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
+ * \param[in] handle
+ * \return int
+ * \retval
+ * \sa
+ */
 extern int com_core_packet_server_fini(int handle);
+
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
+ * \param[in] flag
+ * \return void
+ * \sa
+ */
 extern void com_core_packet_use_thread(int flag);
 
 #ifdef __cplusplus
