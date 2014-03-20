@@ -77,7 +77,7 @@ struct request_ctx {
 	int (*recv_cb)(pid_t pid, int handle, const struct packet *packet, void *data);
 	void *data;
 
-	int in_recv;
+	int inuse;
 };
 
 struct recv_ctx {
@@ -92,6 +92,8 @@ struct recv_ctx {
 	pid_t pid;
 	struct packet *packet;
 	double timeout;
+
+	int inuse;
 };
 
 static inline struct request_ctx *find_request_ctx(int handle, double seq)
@@ -110,8 +112,20 @@ static inline struct request_ctx *find_request_ctx(int handle, double seq)
 
 static inline void destroy_request_ctx(struct request_ctx *ctx)
 {
+	struct dlist *l;
+
+	if (ctx->inuse) {
+		return;
+	}
+
+	l = dlist_find_data(s_info.request_list, ctx);
+	if (!l) {
+		return;
+	}
+
+	s_info.request_list = dlist_remove(s_info.request_list, l);
+
 	packet_unref(ctx->packet);
-	dlist_remove_data(s_info.request_list, ctx);
 	free(ctx);
 }
 
@@ -130,7 +144,7 @@ static inline struct request_ctx *create_request_ctx(int handle)
 	ctx->packet = NULL;
 	ctx->recv_cb = NULL;
 	ctx->data = NULL;
-	ctx->in_recv = 0;
+	ctx->inuse = 0;
 
 	s_info.request_list = dlist_append(s_info.request_list, ctx);
 	return ctx;
@@ -152,7 +166,19 @@ static inline struct recv_ctx *find_recv_ctx(int handle)
 
 static inline void destroy_recv_ctx(struct recv_ctx *ctx)
 {
-	dlist_remove_data(s_info.recv_list, ctx);
+	struct dlist *l;
+
+	if (ctx->inuse) {
+		return;
+	}
+
+	l = dlist_find_data(s_info.recv_list, ctx);
+	if (!l) {
+		return;
+	}
+
+	s_info.recv_list = dlist_remove(s_info.recv_list, l);
+
 	packet_destroy(ctx->packet);
 	free(ctx);
 }
@@ -173,12 +199,13 @@ static inline struct recv_ctx *create_recv_ctx(int handle, double timeout)
 	ctx->handle = handle;
 	ctx->pid = (pid_t)-1;
 	ctx->timeout = timeout;
+	ctx->inuse = 0;
 
 	s_info.recv_list = dlist_append(s_info.recv_list, ctx);
 	return ctx;
 }
 
-static inline int packet_ready(int handle, const struct recv_ctx *receive, struct method *table)
+static inline int packet_ready(int handle, struct recv_ctx *receive, struct method *table)
 {
 	struct request_ctx *request;
 	double sequence;
@@ -198,9 +225,11 @@ static inline int packet_ready(int handle, const struct recv_ctx *receive, struc
 		}
 
 		if (request->recv_cb) {
-			request->in_recv = 1;
+			request->inuse = 1;
+			receive->inuse = 1;
 			request->recv_cb(receive->pid, handle, receive->packet, request->data);
-			request->in_recv = 0;
+			receive->inuse = 0;
+			request->inuse = 0;
 		}
 
 		destroy_request_ctx(request);
@@ -211,7 +240,9 @@ static inline int packet_ready(int handle, const struct recv_ctx *receive, struc
 				continue;
 			}
 
+			receive->inuse = 1;
 			result = table[i].handler(receive->pid, handle, receive->packet);
+			receive->inuse = 0;
 			if (result) {
 				ret = s_info.vtable.send(handle, (void *)packet_data(result), packet_size(result), DEFAULT_TIMEOUT);
 				if (ret < 0) {
@@ -221,6 +252,7 @@ static inline int packet_ready(int handle, const struct recv_ctx *receive, struc
 				}
 				packet_destroy(result);
 			}
+
 			break;
 		}
 
@@ -231,10 +263,14 @@ static inline int packet_ready(int handle, const struct recv_ctx *receive, struc
 				continue;
 			}
 
+			receive->inuse = 1;
 			result = table[i].handler(receive->pid, handle, receive->packet);
+			receive->inuse = 0;
 			if (result) {
 				packet_destroy(result);
 			}
+
+			break;
 		}
 		break;
 	default:
@@ -253,8 +289,8 @@ static int client_disconnected_cb(int handle, void *data)
 	struct request_ctx *request;
 	struct dlist *l;
 	struct dlist *n;
+	int inuse_found = 0;
 	pid_t pid = (pid_t)-1;
-	int referred = 0;
 
 	receive = find_recv_ctx(handle);
 	if (receive) {
@@ -268,8 +304,8 @@ static int client_disconnected_cb(int handle, void *data)
 			continue;
 		}
 
-		if (request->in_recv) {
-			referred = 1;
+		if (request->inuse) {
+			inuse_found = 1;
 			continue;
 		}
 
@@ -280,7 +316,7 @@ static int client_disconnected_cb(int handle, void *data)
 		destroy_request_ctx(request);
 	}
 
-	if (receive && !referred) {
+	if (receive && !inuse_found) {
 		destroy_recv_ctx(receive);
 	}
 

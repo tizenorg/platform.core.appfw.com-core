@@ -38,9 +38,15 @@
 static struct {
 	struct dlist *conn_cb_list;
 	struct dlist *disconn_cb_list;
+	enum processing_event_callback {
+		PROCESSING_NONE = 0x0,
+		PROCESSING_DISCONNECTION = 0x01,
+		PROCESSING_CONNECTION = 0x02,
+	} processing_event_callback;
 } s_info = {
 	.conn_cb_list = NULL,
 	.disconn_cb_list = NULL,
+	.processing_event_callback = PROCESSING_NONE,
 };
 
 struct cbdata {
@@ -49,6 +55,7 @@ struct cbdata {
 };
 
 struct evtdata {
+	int deleted;
 	int (*evt_cb)(int fd, void *data);
 	void *data;
 };
@@ -59,14 +66,19 @@ HAPI void invoke_con_cb_list(int handle)
 	struct dlist *n;
 	struct evtdata *cbdata;
 
+	s_info.processing_event_callback |= PROCESSING_CONNECTION;
 	dlist_foreach_safe(s_info.conn_cb_list, l, n, cbdata) {
-		if (cbdata->evt_cb(handle, cbdata->data) < 0) {
-			if (dlist_find_data(s_info.conn_cb_list, cbdata)) {
-				s_info.conn_cb_list = dlist_remove(s_info.conn_cb_list, l);
-				free(cbdata);
-			}
+		/*!
+		 * \NOTE
+		 * cbdata->deleted must has to be checked before call the function and
+		 * return from the function call.
+		 */
+		if (cbdata->deleted || cbdata->evt_cb(handle, cbdata->data) < 0 || cbdata->deleted) {
+			s_info.conn_cb_list = dlist_remove(s_info.conn_cb_list, l);
+			free(cbdata);
 		}
 	}
+	s_info.processing_event_callback &= ~PROCESSING_CONNECTION;
 }
 
 HAPI void invoke_disconn_cb_list(int handle)
@@ -75,14 +87,19 @@ HAPI void invoke_disconn_cb_list(int handle)
 	struct dlist *n;
 	struct evtdata *cbdata;
 
+	s_info.processing_event_callback |= PROCESSING_DISCONNECTION;
 	dlist_foreach_safe(s_info.disconn_cb_list, l, n, cbdata) {
-		if (cbdata->evt_cb(handle, cbdata->data) < 0) {
-			if (dlist_find_data(s_info.disconn_cb_list, cbdata)) {
-				s_info.disconn_cb_list = dlist_remove(s_info.disconn_cb_list, l);
-				free(cbdata);
-			}
+		/*!
+		 * \NOTE
+		 * cbdata->deleted must has to be checked before call the function and
+		 * return from the function call.
+		 */
+		if (cbdata->deleted || cbdata->evt_cb(handle, cbdata->data) < 0 || cbdata->deleted) {
+			s_info.disconn_cb_list = dlist_remove(s_info.disconn_cb_list, l);
+			free(cbdata);
 		}
 	}
+	s_info.processing_event_callback &= ~PROCESSING_DISCONNECTION;
 }
 
 static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
@@ -302,6 +319,7 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 	}
 
 	g_io_channel_unref(gio);
+
 	invoke_con_cb_list(client_fd);
 	return client_fd;
 }
@@ -317,6 +335,7 @@ EAPI int com_core_add_event_callback(enum com_core_event_type type, int (*evt_cb
 
 	cbdata->evt_cb = evt_cb;
 	cbdata->data = data;
+	cbdata->deleted = 0;
 
 	if (type == CONNECTOR_CONNECTED) {
 		s_info.conn_cb_list = dlist_append(s_info.conn_cb_list, cbdata);
@@ -465,8 +484,14 @@ EAPI void *com_core_del_event_callback(enum com_core_event_type type, int (*cb)(
 			if (cbdata->evt_cb == cb && cbdata->data == data) {
 				void *data;
 				data = cbdata->data;
-				dlist_remove_data(s_info.conn_cb_list, cbdata);
-				free(cbdata);
+
+				if ((s_info.processing_event_callback & PROCESSING_CONNECTION) == PROCESSING_CONNECTION) {
+					cbdata->deleted = 1;
+				} else {
+					dlist_remove_data(s_info.conn_cb_list, cbdata);
+					free(cbdata);
+				}
+
 				return data;
 			}
 		}
@@ -475,8 +500,13 @@ EAPI void *com_core_del_event_callback(enum com_core_event_type type, int (*cb)(
 			if (cbdata->evt_cb == cb && cbdata->data == data) {
 				void *data;
 				data = cbdata->data;
-				dlist_remove_data(s_info.disconn_cb_list, cbdata);
-				free(cbdata);
+
+				if ((s_info.processing_event_callback & PROCESSING_DISCONNECTION) == PROCESSING_DISCONNECTION) {
+					cbdata->deleted = 1;
+				} else {
+					dlist_remove_data(s_info.disconn_cb_list, cbdata);
+					free(cbdata);
+				}
 				return data;
 			}
 		}
