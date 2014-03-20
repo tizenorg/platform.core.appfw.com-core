@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 
 #include <glib.h>
 
@@ -102,6 +103,20 @@ HAPI void invoke_disconn_cb_list(int handle)
 	s_info.processing_event_callback &= ~PROCESSING_DISCONNECTION;
 }
 
+static int validate_handle(int fd)
+{
+	int error;
+	socklen_t len;
+
+	len = sizeof(error);
+	if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
+		ErrPrint("getsockopt: %s\n", strerror(errno));
+		return 0;
+	}
+
+	return !(error == EBADF);
+}
+
 static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 {
 	int client_fd;
@@ -132,7 +147,8 @@ static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 		return FALSE;
 	}
 
-	return TRUE;
+	/* Check whether the socket FD is closed or not */
+	return validate_handle(client_fd) ? TRUE : FALSE;
 }
 
 static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
@@ -200,7 +216,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
 	g_io_channel_unref(gio);
 
 	invoke_con_cb_list(client_fd);
-	return TRUE;
+	return validate_handle(socket_fd) ? TRUE : FALSE;
 }
 
 EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data)

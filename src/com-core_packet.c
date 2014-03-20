@@ -164,6 +164,20 @@ static inline struct recv_ctx *find_recv_ctx(int handle)
 	return NULL;
 }
 
+static inline void recreate_recv_ctx(struct recv_ctx *ctx)
+{
+	if (ctx->packet) {
+		packet_destroy(ctx->packet);
+		ctx->packet = NULL;
+	}
+	ctx->state = RECV_STATE_INIT;
+	ctx->offset = 0;
+	ctx->pid = (pid_t)-1;
+	// ctx->inuse
+	// ctx->handle
+	// ctx->timeout
+}
+
 static inline void destroy_recv_ctx(struct recv_ctx *ctx)
 {
 	struct dlist *l;
@@ -448,7 +462,10 @@ static int service_cb(int handle, void *data)
 	if (receive->state == RECV_STATE_READY) {
 		ret = packet_ready(handle, receive, data);
 		if (ret == 0) {
-			destroy_recv_ctx(receive);
+			/*!
+			 * If ret is negative value, the receive context will be destroyed from disconnected callback
+			 */
+			recreate_recv_ctx(receive);
 		}
 		/*!
 		 * if ret is negative value, disconnected_cb will be called after this function
