@@ -499,7 +499,7 @@ static gboolean evt_pipe_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 
 errout:
 	DbgPrint("Disconnecting\n");
-	invoke_disconn_cb_list(tcb->handle);
+	invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
 	terminate_thread(tcb);
 	tcb_destroy(tcb);
 	return FALSE;
@@ -624,6 +624,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	}
 
 	g_io_channel_set_close_on_unref(gio, FALSE);
+
 	tcb->id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)evt_pipe_cb, tcb);
 	if (tcb->id == 0) {
 		GError *err = NULL;
@@ -641,12 +642,12 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	}
 	g_io_channel_unref(gio);
 
-	invoke_con_cb_list(tcb->handle);
+	invoke_con_cb_list(tcb->handle, tcb->handle, 0, NULL, 0);
 
 	ret = pthread_create(&tcb->thid, NULL, client_cb, tcb);
 	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
-		invoke_disconn_cb_list(tcb->handle);
+		invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
 		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		server_destroy(server);
@@ -717,12 +718,12 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 
 	g_io_channel_unref(gio);
 
-	invoke_con_cb_list(tcb->handle);
+	invoke_con_cb_list(tcb->handle, tcb->handle, 0, NULL, 0);
 
 	ret = pthread_create(&tcb->thid, NULL, client_cb, tcb);
 	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
-		invoke_disconn_cb_list(tcb->handle);
+		invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
 		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		return -EFAULT;
@@ -972,7 +973,7 @@ EAPI int com_core_thread_server_destroy(int handle)
 			continue;
 		}
 
-		invoke_disconn_cb_list(handle);
+		invoke_disconn_cb_list(handle, 0, 0, 0);
 		terminate_thread(tcb);
 		tcb_destroy(tcb);
 		return 0;
@@ -983,7 +984,7 @@ EAPI int com_core_thread_server_destroy(int handle)
 			continue;
 		}
 
-		invoke_disconn_cb_list(handle);
+		invoke_disconn_cb_list(handle, 0, 0, 0);
 		server_destroy(server);
 		return 0;
 	}
@@ -1004,7 +1005,7 @@ EAPI int com_core_thread_client_destroy(int handle)
 		return -ENOENT;
 	}
 
-	invoke_disconn_cb_list(handle);
+	invoke_disconn_cb_list(handle, 0, 0, 0);
 	terminate_thread(tcb);
 	tcb_destroy(tcb);
 	return 0;
