@@ -669,8 +669,9 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 	int ret;
 
 	client_fd = secure_socket_create_client(addr);
-	if (client_fd < 0)
+	if (client_fd < 0) {
 		return client_fd;
+	}
 
 	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));

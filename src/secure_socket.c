@@ -77,8 +77,8 @@ static inline int create_unix_socket(const char *peer, int port, struct sockaddr
 
 	handle = socket(PF_UNIX, SOCK_STREAM, 0);
 	if (handle < 0) {
+		handle = -errno;
 		ErrPrint("Failed to create a socket %s\n", strerror(errno));
-		return -1;
 	}
 
 	return handle;
@@ -316,7 +316,7 @@ EAPI int secure_socket_create_server(const char *peer)
 	addr = parse_scheme(peer, &port, &vtable);
 	if (!addr) {
 		ErrPrint("Failed to parse scheme\n");
-		return -EFAULT;
+		return -EINVAL;
 	}
 
 	switch (vtable.type) {
@@ -511,9 +511,12 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
 EAPI int secure_socket_destroy_handle(int handle)
 {
 	if (close(handle) < 0) {
+		int ret;
+		ret = -errno;
 		ErrPrint("close: %s\n", strerror(errno));
-		return -1;
+		return ret;
 	}
+
 	return 0;
 }
 
