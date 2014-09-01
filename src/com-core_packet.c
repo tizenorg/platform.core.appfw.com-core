@@ -37,6 +37,11 @@
 #include "util.h"
 
 #define DEFAULT_TIMEOUT 2.0f
+/**
+ * @brief
+ * If the first character is started with 0x01,
+ * The command string should be treated as a index of command table.
+ */
 
 static struct info {
 	struct dlist *recv_list;
@@ -226,6 +231,8 @@ static inline int packet_ready(int handle, struct recv_ctx *receive, struct meth
 	struct packet *result;
 	register int i;
 	int ret;
+	const char *cmd;
+	unsigned int cmd_idx;
 
 	ret = 0;
 
@@ -249,13 +256,27 @@ static inline int packet_ready(int handle, struct recv_ctx *receive, struct meth
 		destroy_request_ctx(request);
 		break;
 	case PACKET_REQ:
-		for (i = 0; table[i].cmd; i++) {
-			if (strcmp(table[i].cmd, packet_command(receive->packet))) {
-				continue;
-			}
+		cmd_idx = 0xFFFFFFFF;
+		cmd = packet_command(receive->packet);
+		if (cmd[0] == PACKET_CMD_INT_TAG) {
+			unsigned int *p_cmd_idx = (unsigned int *)cmd;
 
+			/* Get rid of LSB 8 bits */
+			cmd_idx = *p_cmd_idx >> 8;
+		} else {
+			for (i = 0; table[i].cmd; i++) {
+				if (strcmp(table[i].cmd, packet_command(receive->packet))) {
+					continue;
+				}
+
+				cmd_idx = (unsigned int)i;
+				break;
+			}
+		}
+
+		if (cmd_idx != 0xFFFFFFFF) {
 			receive->inuse = 1;
-			result = table[i].handler(receive->pid, handle, receive->packet);
+			result = table[cmd_idx].handler(receive->pid, handle, receive->packet);
 			receive->inuse = 0;
 			if (result) {
 				ret = s_info.vtable.send(handle, (void *)packet_data(result), packet_size(result), DEFAULT_TIMEOUT);
@@ -266,25 +287,36 @@ static inline int packet_ready(int handle, struct recv_ctx *receive, struct meth
 				}
 				packet_destroy(result);
 			}
-
-			break;
 		}
 
 		break;
 	case PACKET_REQ_NOACK:
-		for (i = 0; table[i].cmd; i++) {
-			if (strcmp(table[i].cmd, packet_command(receive->packet))) {
-				continue;
-			}
+		cmd_idx = 0xFFFFFFFF;
+		cmd = packet_command(receive->packet);
+		if (cmd[0] == PACKET_CMD_INT_TAG) {
+			unsigned int *p_cmd_idx = (unsigned int *)cmd;
 
+			/* Get rid of LSB 8 bits */
+			cmd_idx = *p_cmd_idx >> 8;
+		} else {
+			for (i = 0; table[i].cmd; i++) {
+				if (strcmp(table[i].cmd, packet_command(receive->packet))) {
+					continue;
+				}
+
+				cmd_idx = (unsigned int)i;
+				break;
+			}
+		}
+
+
+		if (cmd_idx != 0xFFFFFFFF) {
 			receive->inuse = 1;
-			result = table[i].handler(receive->pid, handle, receive->packet);
+			result = table[cmd_idx].handler(receive->pid, handle, receive->packet);
 			receive->inuse = 0;
 			if (result) {
 				packet_destroy(result);
 			}
-
-			break;
 		}
 		break;
 	default:

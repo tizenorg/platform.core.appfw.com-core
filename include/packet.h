@@ -47,6 +47,7 @@ enum packet_flag {
  * \brief Maximum length of a command string
  */
 #define PACKET_MAX_CMD	24
+#define PACKET_CMD_INT_TAG	0x01
 
 /*!
  * \brief Create a packet
