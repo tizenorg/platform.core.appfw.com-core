@@ -344,7 +344,14 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	result->data->head.seq = packet->data->head.seq;
 	result->data->head.type = PACKET_ACK;
 	result->data->head.version = packet->data->head.version;
-	strcpy(result->data->head.command, packet->data->head.command); /* we don't need to use strncmp */
+	if (packet->data->head.command[0] == PACKET_CMD_INT_TAG) {
+		unsigned int *head_cmd = (unsigned int *)result->data->head.command;
+		unsigned int *packet_cmd = (unsigned int *)packet->data->head.command;
+
+		*head_cmd = *packet_cmd;
+	} else {
+		strcpy(result->data->head.command, packet->data->head.command); /* we don't need to use strncmp */
+	}
 	result->data->head.payload_size = 0;
 	payload_size -= sizeof(*result->data);
 
@@ -404,7 +411,14 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 	packet->data->head.seq = util_timestamp();
 	packet->data->head.type = PACKET_REQ;
 	packet->data->head.version = PACKET_VERSION;
-	strncpy(packet->data->head.command, cmd, sizeof(packet->data->head.command));
+	if (cmd[0] == PACKET_CMD_INT_TAG) {
+		unsigned int *head_cmd = (unsigned int *)packet->data->head.command;
+		unsigned int *in_cmd = (unsigned int *)cmd;
+
+		*head_cmd = *in_cmd;
+	} else {
+		strncpy(packet->data->head.command, cmd, sizeof(packet->data->head.command));
+	}
 	packet->data->head.payload_size = 0;
 	payload_size -= sizeof(*packet->data); /*!< Usable payload size (except head size) */
 
@@ -449,7 +463,13 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 	result->data->head.seq = util_timestamp();
 	result->data->head.type = PACKET_REQ_NOACK;
 	result->data->head.version = PACKET_VERSION;
-	strncpy(result->data->head.command, cmd, sizeof(result->data->head.command));
+	if (cmd[0] == PACKET_CMD_INT_TAG) {
+		unsigned int *head_cmd = (unsigned int *)result->data->head.command;
+		unsigned int *cmd_in = (unsigned int *)cmd;
+		*head_cmd = *cmd_in;
+	} else {
+		strncpy(result->data->head.command, cmd, sizeof(result->data->head.command));
+	}
 	result->data->head.payload_size = 0;
 	payload_size -= sizeof(*result->data);
 
