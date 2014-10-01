@@ -224,7 +224,6 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 {
 	char *payload;
 	char *str;
-	int align;
 
 	while (*ptr) {
 		payload = packet->data->payload + packet->data->head.payload_size;
@@ -232,12 +231,7 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 		switch (*ptr) {
 		case 'i':
 		case 'I':
-			align = (unsigned long)payload & (sizeof(int) - 1);
-			if (align) {
-				align = sizeof(int) - align;
-			}
-
-			packet->data->head.payload_size += sizeof(int) + align;
+			packet->data->head.payload_size += sizeof(int);
 			packet->data = check_and_expand_packet(packet->data, &payload_size);
 			if (!packet->data) {
 				packet->state = INVALID;
@@ -246,7 +240,7 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 				goto out;
 			}
 
-			*((int *)(payload + align)) = (int)va_arg(va, int);
+			*((int *)payload) = (int)va_arg(va, int);
 			break;
 		case 's':
 		case 'S':
@@ -278,12 +272,7 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 			break;
 		case 'd':
 		case 'D':
-			align = (unsigned long)payload & (sizeof(double) - 1);
-			if (align) {
-				align = sizeof(double) - align;
-			}
-
-			packet->data->head.payload_size += sizeof(double) + align;
+			packet->data->head.payload_size += sizeof(double);
 			packet->data = check_and_expand_packet(packet->data, &payload_size);
 			if (!packet->data) {
 				packet->state = INVALID;
@@ -292,7 +281,7 @@ static inline struct packet *packet_body_filler(struct packet *packet, int paylo
 				goto out;
 			}
 
-			*((double *)(payload + align)) = (double)va_arg(va, double);
+			*((double *)payload) = (double)va_arg(va, double);
 			break;
 		default:
 			ErrPrint("Invalid type [%c]\n", *ptr);
@@ -470,7 +459,6 @@ EAPI int packet_get(const struct packet *packet, const char *fmt, ...)
 	int *int_ptr;
 	double *double_ptr;
 	char **str_ptr;
-	int align;
 
 	if (!packet || packet->state != VALID) {
 		return -EINVAL;
@@ -484,25 +472,16 @@ EAPI int packet_get(const struct packet *packet, const char *fmt, ...)
 		switch (*ptr) {
 		case 'i':
 		case 'I':
-			align = (unsigned long)payload & (sizeof(int) - 1);
-			if (align) {
-				align = sizeof(int) - align;
-			}
-
 			int_ptr = (int *)va_arg(va, int *);
-			*int_ptr = *((int *)(payload + align));
-			offset += (sizeof(int) + align);
+			*int_ptr = *((int *)payload);
+			offset += sizeof(int);
 			ret++;
 			break;
 		case 'd':
 		case 'D':
-			align = (unsigned long)payload & (sizeof(double) - 1);
-			if (align) {
-				align = sizeof(double) - align;
-			}
 			double_ptr = (double *)va_arg(va, double *);
-			*double_ptr = *((double *)(payload + align));
-			offset += (sizeof(double) + align);
+			*double_ptr = *((double *)payload);
+			offset += sizeof(double);
 			ret++;
 			break;
 		case 's':
