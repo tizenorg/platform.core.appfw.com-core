@@ -378,7 +378,7 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 
 	payload_size = sizeof(*packet->data) + BUFSIZ;
 	packet->refcnt = 0;
-	packet->data = calloc(1, payload_size);
+	packet->data = calloc(1, BUFSIZ);
 	if (!packet->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
 		packet->state = INVALID;
