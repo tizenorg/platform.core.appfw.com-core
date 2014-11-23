@@ -86,7 +86,8 @@ extern int secure_socket_get_connection_handle(int server_handle);
  * \retval
  * \sa
  */
-extern int secure_socket_send(int conn, const char *buffer, int size, int fd);
+extern int secure_socket_send(int conn, const char *buffer, int size);
+extern int secure_socket_send_with_fd(int handle, const char *buffer, int size, int fd);
 
 /*!
  * \brief Recv data from the connected peer. and its PID value
@@ -101,7 +102,8 @@ extern int secure_socket_send(int conn, const char *buffer, int size, int fd);
  * \retval
  * \sa
  */
-extern int secure_socket_recv(int conn, char *buffer, int size, int *sender_pid, int *fd);
+extern int secure_socket_recv(int conn, char *buffer, int size, int *sender_pid);
+extern int secure_socket_recv_with_fd(int conn, char *buffer, int size, int *sender_pid, int *fd);
 
 /*!
  * \brief Destroy a connection

@@ -404,7 +404,7 @@ static void *client_cb(void *data)
 	    break;
 	}
 
-	ret = secure_socket_recv(tcb->handle, chunk->data, chunk->size, &chunk->pid, &chunk->fd);
+	ret = secure_socket_recv_with_fd(tcb->handle, chunk->data, chunk->size, &chunk->pid, &chunk->fd);
 	if (ret <= 0) {
 	    destroy_chunk(chunk);
 	    if (ret == -EAGAIN) {
@@ -904,7 +904,7 @@ EAPI int com_core_thread_send_with_fd(int handle, const char *buffer, int size, 
 	    return -EINVAL;
 	}
 
-	ret = secure_socket_send(tcb->handle, buffer + writesize, size, fd);
+	ret = secure_socket_send_with_fd(tcb->handle, buffer + writesize, size, fd);
 	if (ret < 0) {
 	    if (ret == -EAGAIN) {
 		DbgPrint("Retry to send data (%d:%d)\n", writesize, size);

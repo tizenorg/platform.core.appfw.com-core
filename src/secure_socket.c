@@ -418,7 +418,7 @@ EAPI int secure_socket_get_connection_handle(int server_handle)
     return handle;
 }
 
-EAPI int secure_socket_send(int handle, const char *buffer, int size, int fd)
+EAPI int secure_socket_send_with_fd(int handle, const char *buffer, int size, int fd)
 {
     struct msghdr msg;
     struct iovec iov;
@@ -470,7 +470,12 @@ EAPI int secure_socket_send(int handle, const char *buffer, int size, int fd)
     return iov.iov_len;
 }
 
-EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid, int *fd)
+EAPI int secure_socket_send(int handle, const char *buffer, int size)
+{
+    return secure_socket_send_with_fd(handle, buffer, size, -1);
+}
+
+EAPI int secure_socket_recv_with_fd(int handle, char *buffer, int size, int *sender_pid, int *fd)
 {
     struct msghdr msg;
     struct cmsghdr *cmsg;
@@ -531,6 +536,11 @@ EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid,
     }
 
     return iov.iov_len;
+}
+
+EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)
+{
+    return secure_socket_recv_with_fd(handle, buffer, size, sender_pid, NULL);
 }
 
 EAPI int secure_socket_destroy_handle(int handle)

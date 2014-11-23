@@ -535,7 +535,7 @@ EAPI int com_core_recv_with_fd(int handle, char *buffer, int size, int *sender_p
 	    return -EINVAL;
 	}
 
-	ret = secure_socket_recv(handle, buffer + readsize, size, sender_pid, recv_fd);
+	ret = secure_socket_recv_with_fd(handle, buffer + readsize, size, sender_pid, recv_fd);
 	if (ret < 0) {
 	    if (ret == -EAGAIN) {
 		DbgPrint("Retry to get data (%d:%d)\n", readsize, size);
@@ -606,7 +606,7 @@ EAPI int com_core_send_with_fd(int handle, const char *buffer, int size, double 
 	    return -EINVAL;
 	}
 
-	ret = secure_socket_send(handle, buffer + writesize, size, fd);
+	ret = secure_socket_send_with_fd(handle, buffer + writesize, size, fd);
 	if (ret < 0) {
 	    if (ret == -EAGAIN) {
 		DbgPrint("Retry to send data (%d:%d)\n", writesize, size);
