@@ -81,25 +81,29 @@ extern int secure_socket_get_connection_handle(int server_handle);
  * \param[in] conn
  * \param[in] buffer
  * \param[in] size
+ * \param[in] fd Shared fd which will be used from receiver process.
  * \return int
  * \retval
  * \sa
  */
 extern int secure_socket_send(int conn, const char *buffer, int size);
+extern int secure_socket_send_with_fd(int handle, const char *buffer, int size, int fd);
 
 /*!
  * \brief Recv data from the connected peer. and its PID value
  * \details N/A
  * \remarks N/A
  * \param[in] connn
- * \param[in] buffer
+ * \param[out] buffer
  * \param[in] size
- * \param[in] sender_pid
+ * \param[out] sender_pid
+ * \param[out] fd  shared fd which is comes from sender process.
  * \return int
  * \retval
  * \sa
  */
 extern int secure_socket_recv(int conn, char *buffer, int size, int *sender_pid);
+extern int secure_socket_recv_with_fd(int conn, char *buffer, int size, int *sender_pid, int *fd);
 
 /*!
  * \brief Destroy a connection

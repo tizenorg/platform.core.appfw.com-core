@@ -133,6 +133,34 @@ extern int com_core_recv(int handle, char *buffer, int size, int *sender_pid, do
  */
 extern int com_core_send(int handle, const char *buffer, int size, double timeout);
 
+/**
+ * @brief
+ * @details
+ * @remarks
+ * @param[in] handle
+ * @param[in] buffer
+ * @param[in] size
+ * @param[in] timeout
+ * @param[in] fd
+ * @return int
+ * @retval
+ * @sa
+ */
+extern int com_core_send_with_fd(int handle, const char *buffer, int size, double timeout, int fd);
+
+/**
+ * @brief
+ * @details
+ * @remarks
+ * @param[in] handle
+ * @param[out] buffer
+ * @param[in] size
+ * @param[out] sender_pid
+ * @param[in] timeout
+ * @param[out] fd
+ */
+extern int com_core_recv_with_fd(int handle, char *buffer, int size, int *sender_pid, double timeout, int *fd);
+
 #ifdef __cplusplus
 }
 #endif

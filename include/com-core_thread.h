@@ -31,6 +31,9 @@ extern int com_core_thread_client_destroy(int handle);
 extern int com_core_thread_recv(int handle, char *buffer, int size, int *sender_pid, double timeout);
 extern int com_core_thread_send(int handle, const char *buffer, int size, double timeout);
 
+extern int com_core_thread_recv_with_fd(int handle, char *buffer, int size, int *sender_pid, double timeout, int *fd);
+extern int com_core_thread_send_with_fd(int handle, const char *buffer, int size, double timeout, int fd);
+
 #ifdef __cplusplus
 }
 #endif
