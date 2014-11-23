@@ -31,601 +31,624 @@
 int errno;
 
 struct data {
-	struct {
-		int version;
-		int payload_size;
-		char command[PACKET_MAX_CMD];
-		enum packet_type type;
-		enum packet_flag flag;
-		double seq;
-		unsigned long source;
-		unsigned long destination;
-		unsigned long mask;
-	} head;
+    struct {
+	int version;
+	int payload_size;
+	char command[PACKET_MAX_CMD];
+	enum packet_type type;
+	enum packet_flag flag;
+	double seq;
+	unsigned long source;
+	unsigned long destination;
+	unsigned long mask;
+	int fd;
+    } head;
 
-	char payload[];
+    char payload[];
 };
 
 struct packet {
-	enum {
-		VALID = 0xbeefbeef,
-		INVALID = 0xdeaddead
-	} state;
-	int refcnt;
-	struct data *data;
+    enum {
+	VALID = 0xbeefbeef,
+	INVALID = 0xdeaddead
+    } state;
+    int refcnt;
+    struct data *data;
 };
 
 EAPI const enum packet_type const packet_type(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return PACKET_ERROR;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return PACKET_ERROR;
+    }
 
-	return packet->data->head.type;
+    return packet->data->head.type;
 }
 
 EAPI unsigned long packet_mask(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return 0;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return 0;
+    }
 
-	return packet->data->head.mask;
+    return packet->data->head.mask;
 }
 
 EAPI int packet_set_mask(struct packet *packet, unsigned long mask)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return -EINVAL;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return -EINVAL;
+    }
 
-	packet->data->head.mask = mask;
-	return 0;
+    packet->data->head.mask = mask;
+    return 0;
 }
 
 EAPI const enum packet_flag const packet_flag(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return PACKET_FLAG_ERROR;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return PACKET_FLAG_ERROR;
+    }
 
-	return packet->data->head.flag;
+    return packet->data->head.flag;
 }
 
 EAPI int packet_set_flag(struct packet *packet, enum packet_flag flag)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return -EINVAL;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return -EINVAL;
+    }
 
-	packet->data->head.flag = flag;
-	return 0;
+    packet->data->head.flag = flag;
+    return 0;
 }
 
 EAPI const unsigned long const packet_source(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return 0;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return 0;
+    }
 
-	return packet->data->head.source;
+    return packet->data->head.source;
 }
 
 EAPI int packet_set_source(struct packet *packet, unsigned long source)
 {
-	if (!packet || packet->state != VALID || !packet->data || !source) {
-		return -EINVAL;
-	}
+    if (!packet || packet->state != VALID || !packet->data || !source) {
+	return -EINVAL;
+    }
 
-	packet->data->head.source = source;
-	return 0;
+    packet->data->head.source = source;
+    return 0;
+}
+
+EAPI int packet_set_fd(struct packet *packet, int fd)
+{
+    if (!packet || packet->state != VALID || !packet->data || fd < 0) {
+	return -EINVAL;
+    }
+
+    packet->data->head.fd = fd;
+    return 0;
+}
+
+EAPI int packet_fd(struct packet *packet)
+{
+    if (!packet || packet->state != VALID || !packet->data) {
+	return -EINVAL;
+    }
+
+    return packet->data->head.fd;
 }
 
 EAPI const unsigned long const packet_destination(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return 0;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return 0;
+    }
 
-	return packet->data->head.destination;
+    return packet->data->head.destination;
 }
 
 EAPI int packet_set_destination(struct packet *packet, unsigned long destination)
 {
-	if (!packet || packet->state != VALID || !packet->data || !destination) {
-		return -EINVAL;
-	}
+    if (!packet || packet->state != VALID || !packet->data || !destination) {
+	return -EINVAL;
+    }
 
-	packet->data->head.destination = destination;
-	return 0;
+    packet->data->head.destination = destination;
+    return 0;
 }
 
 EAPI const int const packet_version(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return PACKET_ERROR;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return PACKET_ERROR;
+    }
 
-	return packet->data->head.version;
+    return packet->data->head.version;
 }
 
 EAPI const int const packet_header_size(void)
 {
-	struct data payload; /* Only for getting the size of header of packet */
+    struct data payload; /* Only for getting the size of header of packet */
 
-	return sizeof(payload.head);
+    return sizeof(payload.head);
 }
 
 EAPI const int const packet_size(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return -EINVAL;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return -EINVAL;
+    }
 
-	return sizeof(*packet->data) + packet->data->head.payload_size;
+    return sizeof(*packet->data) + packet->data->head.payload_size;
 }
 
 EAPI const double const packet_seq(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return 0;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return 0;
+    }
 
-	return packet->data->head.seq;
+    return packet->data->head.seq;
 }
 
 EAPI const int const packet_payload_size(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return -EINVAL;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return -EINVAL;
+    }
 
-	return packet->data->head.payload_size;
+    return packet->data->head.payload_size;
 }
 
 EAPI const char * const packet_command(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID || !packet->data) {
-		return NULL;
-	}
+    if (!packet || packet->state != VALID || !packet->data) {
+	return NULL;
+    }
 
-	return packet->data->head.command;
+    return packet->data->head.command;
 }
 
 EAPI const void * const packet_data(const struct packet *packet)
 {
-	if (!packet || packet->state != VALID) {
-		return NULL;
-	}
+    if (!packet || packet->state != VALID) {
+	return NULL;
+    }
 
-	return packet->data;
+    return packet->data;
 }
 
 static inline __attribute__((always_inline)) struct data *check_and_expand_packet(struct data *packet, int *payload_size)
 {
-	struct data *new_packet;
+    struct data *new_packet;
 
-	if (packet->head.payload_size < *payload_size) {
-		return packet;
-	}
+    if (packet->head.payload_size < *payload_size) {
+	return packet;
+    }
 
-	new_packet = realloc(packet, sizeof(*packet) + *payload_size + BUFSIZ); /*!< Expanding to +BUFSIZ */
-	if (!new_packet) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		free(packet);
-		return NULL;
-	}
+    new_packet = realloc(packet, sizeof(*packet) + *payload_size + BUFSIZ); /*!< Expanding to +BUFSIZ */
+    if (!new_packet) {
+	ErrPrint("Heap: %s\n", strerror(errno));
+	free(packet);
+	return NULL;
+    }
 
-	*payload_size += BUFSIZ;
-	return new_packet;
+    *payload_size += BUFSIZ;
+    return new_packet;
 }
 
 static inline struct packet *packet_body_filler(struct packet *packet, int payload_size, const char *ptr, va_list va)
 {
-	char *payload;
-	char *str;
-	int align;
+    char *payload;
+    char *str;
+    int align;
 
-	while (*ptr) {
-		payload = packet->data->payload + packet->data->head.payload_size;
+    while (*ptr) {
+	payload = packet->data->payload + packet->data->head.payload_size;
 
-		switch (*ptr) {
-		case 'i':
-		case 'I':
-			align = (unsigned long)payload & (sizeof(int) - 1);
-			if (align) {
-				align = sizeof(int) - align;
-			}
+	switch (*ptr) {
+	    case 'i':
+	    case 'I':
+		align = (unsigned long)payload & (sizeof(int) - 1);
+		if (align) {
+		    align = sizeof(int) - align;
+		}
 
-			packet->data->head.payload_size += sizeof(int) + align;
-			packet->data = check_and_expand_packet(packet->data, &payload_size);
-			if (!packet->data) {
-				packet->state = INVALID;
-				free(packet);
-				packet = NULL;
-				goto out;
-			}
+		packet->data->head.payload_size += sizeof(int) + align;
+		packet->data = check_and_expand_packet(packet->data, &payload_size);
+		if (!packet->data) {
+		    packet->state = INVALID;
+		    free(packet);
+		    packet = NULL;
+		    goto out;
+		}
 
-			*((int *)(payload + align)) = (int)va_arg(va, int);
-			break;
-		case 's':
-		case 'S':
-			str = (char *)va_arg(va, char *);
+		*((int *)(payload + align)) = (int)va_arg(va, int);
+		break;
+	    case 's':
+	    case 'S':
+		str = (char *)va_arg(va, char *);
 
-			if (str) {
-				packet->data->head.payload_size += strlen(str) + 1; /*!< Including NIL */
-				packet->data = check_and_expand_packet(packet->data, &payload_size);
-				if (!packet->data) {
-					packet->state = INVALID;
-					free(packet);
-					packet = NULL;
-					goto out;
-				}
-
-				strcpy(payload, str); /*!< Including NIL */
-			} else {
-				packet->data->head.payload_size += 1;
-				packet->data = check_and_expand_packet(packet->data, &payload_size);
-				if (!packet->data) {
-					packet->state = INVALID;
-					free(packet);
-					packet = NULL;
-					goto out;
-				}
-
-				payload[0] = '\0';
-			}
-			break;
-		case 'd':
-		case 'D':
-			align = (unsigned long)payload & (sizeof(double) - 1);
-			if (align) {
-				align = sizeof(double) - align;
-			}
-
-			packet->data->head.payload_size += sizeof(double) + align;
-			packet->data = check_and_expand_packet(packet->data, &payload_size);
-			if (!packet->data) {
-				packet->state = INVALID;
-				free(packet);
-				packet = NULL;
-				goto out;
-			}
-
-			*((double *)(payload + align)) = (double)va_arg(va, double);
-			break;
-		default:
-			ErrPrint("Invalid type [%c]\n", *ptr);
+		if (str) {
+		    packet->data->head.payload_size += strlen(str) + 1; /*!< Including NIL */
+		    packet->data = check_and_expand_packet(packet->data, &payload_size);
+		    if (!packet->data) {
 			packet->state = INVALID;
-			free(packet->data);
 			free(packet);
 			packet = NULL;
 			goto out;
+		    }
+
+		    strcpy(payload, str); /*!< Including NIL */
+		} else {
+		    packet->data->head.payload_size += 1;
+		    packet->data = check_and_expand_packet(packet->data, &payload_size);
+		    if (!packet->data) {
+			packet->state = INVALID;
+			free(packet);
+			packet = NULL;
+			goto out;
+		    }
+
+		    payload[0] = '\0';
+		}
+		break;
+	    case 'd':
+	    case 'D':
+		align = (unsigned long)payload & (sizeof(double) - 1);
+		if (align) {
+		    align = sizeof(double) - align;
 		}
 
-		ptr++;
+		packet->data->head.payload_size += sizeof(double) + align;
+		packet->data = check_and_expand_packet(packet->data, &payload_size);
+		if (!packet->data) {
+		    packet->state = INVALID;
+		    free(packet);
+		    packet = NULL;
+		    goto out;
+		}
+
+		*((double *)(payload + align)) = (double)va_arg(va, double);
+		break;
+	    default:
+		ErrPrint("Invalid type [%c]\n", *ptr);
+		packet->state = INVALID;
+		free(packet->data);
+		free(packet);
+		packet = NULL;
+		goto out;
 	}
 
+	ptr++;
+    }
+
 out:
-	return packet;
+    return packet;
 }
 
 EAPI struct packet *packet_create_reply(const struct packet *packet, const char *fmt, ...)
 {
-	int payload_size;
-	struct packet *result;
-	va_list va;
+    int payload_size;
+    struct packet *result;
+    va_list va;
 
-	if (!packet || packet->state != VALID) {
-		return NULL;
-	}
+    if (!packet || packet->state != VALID) {
+	return NULL;
+    }
 
-	result = malloc(sizeof(*result));
-	if (!result) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		return NULL;
-	}
+    result = malloc(sizeof(*result));
+    if (!result) {
+	ErrPrint("Heap: %s\n", strerror(errno));
+	return NULL;
+    }
 
-	payload_size = sizeof(*result->data) + BUFSIZ;
-	result->refcnt = 0;
-	result->data = calloc(1, payload_size);
-	if (!packet->data) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		result->state = INVALID;
-		free(result);
-		return NULL;
-	}
+    payload_size = sizeof(*result->data) + BUFSIZ;
+    result->refcnt = 0;
+    result->data = calloc(1, payload_size);
+    if (!packet->data) {
+	ErrPrint("Heap: %s\n", strerror(errno));
+	result->state = INVALID;
+	free(result);
+	return NULL;
+    }
 
-	result->state = VALID;
-	result->data->head.source = packet->data->head.destination;
-	result->data->head.destination = packet->data->head.source;
-	result->data->head.mask = 0xFFFFFFFF;
+    result->state = VALID;
+    result->data->head.source = packet->data->head.destination;
+    result->data->head.destination = packet->data->head.source;
+    result->data->head.mask = 0xFFFFFFFF;
 
-	result->data->head.seq = packet->data->head.seq;
-	result->data->head.type = PACKET_ACK;
-	result->data->head.version = packet->data->head.version;
-	if (packet->data->head.command[0] == PACKET_CMD_INT_TAG) {
-		unsigned int *head_cmd = (unsigned int *)result->data->head.command;
-		unsigned int *packet_cmd = (unsigned int *)packet->data->head.command;
+    result->data->head.seq = packet->data->head.seq;
+    result->data->head.type = PACKET_ACK;
+    result->data->head.version = packet->data->head.version;
+    result->data->head.fd = -1;
+    if (packet->data->head.command[0] == PACKET_CMD_INT_TAG) {
+	unsigned int *head_cmd = (unsigned int *)result->data->head.command;
+	unsigned int *packet_cmd = (unsigned int *)packet->data->head.command;
 
-		*head_cmd = *packet_cmd;
-	} else {
-		strcpy(result->data->head.command, packet->data->head.command); /* we don't need to use strncmp */
-	}
-	result->data->head.payload_size = 0;
-	payload_size -= sizeof(*result->data);
+	*head_cmd = *packet_cmd;
+    } else {
+	strcpy(result->data->head.command, packet->data->head.command); /* we don't need to use strncmp */
+    }
+    result->data->head.payload_size = 0;
+    payload_size -= sizeof(*result->data);
 
-	va_start(va, fmt);
-	result = packet_body_filler(result, payload_size, fmt, va);
-	va_end(va);
+    va_start(va, fmt);
+    result = packet_body_filler(result, payload_size, fmt, va);
+    va_end(va);
 
-	return packet_ref(result);
+    return packet_ref(result);
 }
 
 EAPI int packet_swap_address(struct packet *packet)
 {
-	unsigned long tmp;
+    unsigned long tmp;
 
-	if (!packet || packet->state != VALID) {
-		return -EINVAL;
-	}
+    if (!packet || packet->state != VALID) {
+	return -EINVAL;
+    }
 
-	tmp = packet->data->head.source;
-	packet->data->head.source = packet->data->head.destination;
-	packet->data->head.destination = tmp;
+    tmp = packet->data->head.source;
+    packet->data->head.source = packet->data->head.destination;
+    packet->data->head.destination = tmp;
 
-	return 0;
+    return 0;
 }
 
 EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 {
-	struct packet *packet;
-	int payload_size;
-	va_list va;
+    struct packet *packet;
+    int payload_size;
+    va_list va;
 
-	if (strlen(cmd) >= PACKET_MAX_CMD) {
-		ErrPrint("Command is too long\n");
-		return NULL;
-	}
+    if (strlen(cmd) >= PACKET_MAX_CMD) {
+	ErrPrint("Command is too long\n");
+	return NULL;
+    }
 
-	packet = malloc(sizeof(*packet));
-	if (!packet) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		return NULL;
-	}
+    packet = malloc(sizeof(*packet));
+    if (!packet) {
+	ErrPrint("Heap: %s\n", strerror(errno));
+	return NULL;
+    }
 
-	payload_size = sizeof(*packet->data) + BUFSIZ;
-	packet->refcnt = 0;
-	packet->data = calloc(1, payload_size);
-	if (!packet->data) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		packet->state = INVALID;
-		free(packet);
-		return NULL;
-	}
+    payload_size = sizeof(*packet->data) + BUFSIZ;
+    packet->refcnt = 0;
+    packet->data = calloc(1, payload_size);
+    if (!packet->data) {
+	ErrPrint("Heap: %s\n", strerror(errno));
+	packet->state = INVALID;
+	free(packet);
+	return NULL;
+    }
 
-	packet->state = VALID;
-	packet->data->head.source = 0lu;
-	packet->data->head.destination = 0lu;
-	packet->data->head.mask = 0xFFFFFFFF;
-	packet->data->head.seq = util_timestamp();
-	packet->data->head.type = PACKET_REQ;
-	packet->data->head.version = PACKET_VERSION;
-	if (cmd[0] == PACKET_CMD_INT_TAG) {
-		unsigned int *head_cmd = (unsigned int *)packet->data->head.command;
-		unsigned int *in_cmd = (unsigned int *)cmd;
+    packet->state = VALID;
+    packet->data->head.source = 0lu;
+    packet->data->head.destination = 0lu;
+    packet->data->head.mask = 0xFFFFFFFF;
+    packet->data->head.seq = util_timestamp();
+    packet->data->head.type = PACKET_REQ;
+    packet->data->head.version = PACKET_VERSION;
+    packet->data->head.fd = -1;
+    if (cmd[0] == PACKET_CMD_INT_TAG) {
+	unsigned int *head_cmd = (unsigned int *)packet->data->head.command;
+	unsigned int *in_cmd = (unsigned int *)cmd;
 
-		*head_cmd = *in_cmd;
-	} else {
-		strncpy(packet->data->head.command, cmd, sizeof(packet->data->head.command));
-	}
-	packet->data->head.payload_size = 0;
-	payload_size -= sizeof(*packet->data); /*!< Usable payload size (except head size) */
+	*head_cmd = *in_cmd;
+    } else {
+	strncpy(packet->data->head.command, cmd, sizeof(packet->data->head.command));
+    }
+    packet->data->head.payload_size = 0;
+    payload_size -= sizeof(*packet->data); /*!< Usable payload size (except head size) */
 
-	va_start(va, fmt);
-	packet = packet_body_filler(packet, payload_size, fmt, va);
-	va_end(va);
+    va_start(va, fmt);
+    packet = packet_body_filler(packet, payload_size, fmt, va);
+    va_end(va);
 
-	return packet_ref(packet);
+    return packet_ref(packet);
 }
 
 EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 {
-	int payload_size;
-	struct packet *result;
-	va_list va;
+    int payload_size;
+    struct packet *result;
+    va_list va;
 
-	if (strlen(cmd) >= PACKET_MAX_CMD) {
-		ErrPrint("Command is too long\n");
-		return NULL;
-	}
+    if (strlen(cmd) >= PACKET_MAX_CMD) {
+	ErrPrint("Command is too long\n");
+	return NULL;
+    }
 
-	result = malloc(sizeof(*result));
-	if (!result) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		return NULL;
-	}
+    result = malloc(sizeof(*result));
+    if (!result) {
+	ErrPrint("Heap: %s\n", strerror(errno));
+	return NULL;
+    }
 
-	payload_size = sizeof(*result->data) + BUFSIZ;
-	result->refcnt = 0;
-	result->data = calloc(1, payload_size);
-	if (!result->data) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		result->state = INVALID;
-		free(result);
-		return NULL;
-	}
+    payload_size = sizeof(*result->data) + BUFSIZ;
+    result->refcnt = 0;
+    result->data = calloc(1, payload_size);
+    if (!result->data) {
+	ErrPrint("Heap: %s\n", strerror(errno));
+	result->state = INVALID;
+	free(result);
+	return NULL;
+    }
 
-	result->state = VALID;
-	result->data->head.source = 0lu;
-	result->data->head.destination = 0lu;
-	result->data->head.mask = 0xFFFFFFFF;
-	result->data->head.seq = util_timestamp();
-	result->data->head.type = PACKET_REQ_NOACK;
-	result->data->head.version = PACKET_VERSION;
-	if (cmd[0] == PACKET_CMD_INT_TAG) {
-		unsigned int *head_cmd = (unsigned int *)result->data->head.command;
-		unsigned int *cmd_in = (unsigned int *)cmd;
-		*head_cmd = *cmd_in;
-	} else {
-		strncpy(result->data->head.command, cmd, sizeof(result->data->head.command));
-	}
-	result->data->head.payload_size = 0;
-	payload_size -= sizeof(*result->data);
+    result->state = VALID;
+    result->data->head.source = 0lu;
+    result->data->head.destination = 0lu;
+    result->data->head.mask = 0xFFFFFFFF;
+    result->data->head.seq = util_timestamp();
+    result->data->head.type = PACKET_REQ_NOACK;
+    result->data->head.version = PACKET_VERSION;
+    result->data->head.fd = -1;
+    if (cmd[0] == PACKET_CMD_INT_TAG) {
+	unsigned int *head_cmd = (unsigned int *)result->data->head.command;
+	unsigned int *cmd_in = (unsigned int *)cmd;
+	*head_cmd = *cmd_in;
+    } else {
+	strncpy(result->data->head.command, cmd, sizeof(result->data->head.command));
+    }
+    result->data->head.payload_size = 0;
+    payload_size -= sizeof(*result->data);
 
-	va_start(va, fmt);
-	result = packet_body_filler(result, payload_size, fmt, va);
-	va_end(va);
+    va_start(va, fmt);
+    result = packet_body_filler(result, payload_size, fmt, va);
+    va_end(va);
 
-	return packet_ref(result);
+    return packet_ref(result);
 }
 
 EAPI int packet_get(const struct packet *packet, const char *fmt, ...)
 {
-	const char *ptr;
-	va_list va;
-	int ret = 0;
-	char *payload;
-	int offset = 0;
-	int *int_ptr;
-	double *double_ptr;
-	char **str_ptr;
-	int align;
+    const char *ptr;
+    va_list va;
+    int ret = 0;
+    char *payload;
+    int offset = 0;
+    int *int_ptr;
+    double *double_ptr;
+    char **str_ptr;
+    int align;
 
-	if (!packet || packet->state != VALID) {
-		return -EINVAL;
-	}
+    if (!packet || packet->state != VALID) {
+	return -EINVAL;
+    }
 
-	va_start(va, fmt);
+    va_start(va, fmt);
 
-	ptr = fmt;
-	while (*ptr && offset < packet->data->head.payload_size) {
-		payload = packet->data->payload + offset;
-		switch (*ptr) {
-		case 'i':
-		case 'I':
-			align = (unsigned long)payload & (sizeof(int) - 1);
-			if (align) {
-				align = sizeof(int) - align;
-			}
-
-			int_ptr = (int *)va_arg(va, int *);
-			*int_ptr = *((int *)(payload + align));
-			offset += (sizeof(int) + align);
-			ret++;
-			break;
-		case 'd':
-		case 'D':
-			align = (unsigned long)payload & (sizeof(double) - 1);
-			if (align) {
-				align = sizeof(double) - align;
-			}
-			double_ptr = (double *)va_arg(va, double *);
-			*double_ptr = *((double *)(payload + align));
-			offset += (sizeof(double) + align);
-			ret++;
-			break;
-		case 's':
-		case 'S':
-			str_ptr = (char **)va_arg(va, char **);
-			*str_ptr = payload;
-			offset += (strlen(*str_ptr) + 1); /*!< Including NIL */
-			ret++;
-			break;
-		default:
-			ret = -EINVAL;
-			goto out;
+    ptr = fmt;
+    while (*ptr && offset < packet->data->head.payload_size) {
+	payload = packet->data->payload + offset;
+	switch (*ptr) {
+	    case 'i':
+	    case 'I':
+		align = (unsigned long)payload & (sizeof(int) - 1);
+		if (align) {
+		    align = sizeof(int) - align;
 		}
-		ptr++;
+
+		int_ptr = (int *)va_arg(va, int *);
+		*int_ptr = *((int *)(payload + align));
+		offset += (sizeof(int) + align);
+		ret++;
+		break;
+	    case 'd':
+	    case 'D':
+		align = (unsigned long)payload & (sizeof(double) - 1);
+		if (align) {
+		    align = sizeof(double) - align;
+		}
+		double_ptr = (double *)va_arg(va, double *);
+		*double_ptr = *((double *)(payload + align));
+		offset += (sizeof(double) + align);
+		ret++;
+		break;
+	    case 's':
+	    case 'S':
+		str_ptr = (char **)va_arg(va, char **);
+		*str_ptr = payload;
+		offset += (strlen(*str_ptr) + 1); /*!< Including NIL */
+		ret++;
+		break;
+	    default:
+		ret = -EINVAL;
+		goto out;
 	}
+	ptr++;
+    }
 
 out:
-	va_end(va);
-	return ret;
+    va_end(va);
+    return ret;
 }
 
 EAPI struct packet *packet_ref(struct packet *packet)
 {
-	if (!packet || packet->state != VALID) {
-		return NULL;
-	}
+    if (!packet || packet->state != VALID) {
+	return NULL;
+    }
 
-	packet->refcnt++;
-	return packet;
+    packet->refcnt++;
+    return packet;
 }
 
 EAPI struct packet *packet_unref(struct packet *packet)
 {
-	if (!packet || packet->state != VALID) {
-		return NULL;
-	}
+    if (!packet || packet->state != VALID) {
+	return NULL;
+    }
 
-	packet->refcnt--;
-	if (packet->refcnt < 0) {
-		ErrPrint("Invalid refcnt\n");
-		return NULL;
-	}
+    packet->refcnt--;
+    if (packet->refcnt < 0) {
+	ErrPrint("Invalid refcnt\n");
+	return NULL;
+    }
 
-	if (packet->refcnt == 0) {
-		packet->state = INVALID;
-		free(packet->data);
-		free(packet);
-		return NULL;
-	}
+    if (packet->refcnt == 0) {
+	packet->state = INVALID;
+	free(packet->data);
+	free(packet);
+	return NULL;
+    }
 
-	return packet;
+    return packet;
 }
 
 EAPI int packet_destroy(struct packet *packet)
 {
-	packet_unref(packet);
-	return 0;
+    packet_unref(packet);
+    return 0;
 }
 
 EAPI struct packet *packet_build(struct packet *packet, int offset, void *data, int size)
 {
-	char *ptr;
+    char *ptr;
 
-	if (packet == NULL) {
-		if (offset) {
-			ErrPrint("Invalid argument\n");
-			return NULL;
-		}
-
-		packet = malloc(sizeof(*packet));
-		if (!packet) {
-			ErrPrint("Heap: %s\n", strerror(errno));
-			return NULL;
-		}
-
-		packet->refcnt = 1;
-		packet->data = calloc(1, size);
-		if (!packet->data) {
-			ErrPrint("Heap: %s\n", strerror(errno));
-			packet->state = INVALID;
-			free(packet);
-			return NULL;
-		}
-
-		packet->state = VALID;
-		memcpy(packet->data, data, size);
-		packet->data->head.mask = 0xFFFFFFFF;
-		return packet;
+    if (packet == NULL) {
+	if (offset) {
+	    ErrPrint("Invalid argument\n");
+	    return NULL;
 	}
 
-	ptr = realloc(packet->data, offset + size);
-	if (!ptr) {
-		ErrPrint("Heap: %s\n", strerror(errno));
-		packet->state = INVALID;
-		free(packet->data);
-		free(packet);
-		return NULL;
+	packet = malloc(sizeof(*packet));
+	if (!packet) {
+	    ErrPrint("Heap: %s\n", strerror(errno));
+	    return NULL;
 	}
 
-	packet->data = (struct data *)ptr;
-	memcpy(ptr + offset, data, size);
+	packet->refcnt = 1;
+	packet->data = calloc(1, size);
+	if (!packet->data) {
+	    ErrPrint("Heap: %s\n", strerror(errno));
+	    packet->state = INVALID;
+	    free(packet);
+	    return NULL;
+	}
 
+	packet->state = VALID;
+	memcpy(packet->data, data, size);
+	packet->data->head.mask = 0xFFFFFFFF;
 	return packet;
+    }
+
+    ptr = realloc(packet->data, offset + size);
+    if (!ptr) {
+	ErrPrint("Heap: %s\n", strerror(errno));
+	packet->state = INVALID;
+	free(packet->data);
+	free(packet);
+	return NULL;
+    }
+
+    packet->data = (struct data *)ptr;
+    memcpy(ptr + offset, data, size);
+
+    return packet;
 }
 
 /* End of a file */
