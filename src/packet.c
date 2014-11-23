@@ -132,7 +132,7 @@ EAPI int packet_set_fd(struct packet *packet, int fd)
     return 0;
 }
 
-EAPI int packet_fd(struct packet *packet)
+EAPI int packet_fd(const struct packet *packet)
 {
     if (!packet || packet->state != VALID || !packet->data) {
 	return -EINVAL;
