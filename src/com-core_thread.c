@@ -575,6 +575,8 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
     struct tcb *tcb;
     GIOChannel *gio;
     struct server *server = data;
+    pthread_attr_t attr;
+    pthread_attr_t *pattr = NULL;
 
     socket_fd = g_io_channel_unix_get_fd(src);
     if (!(cond & G_IO_IN)) {
@@ -646,7 +648,26 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 
     invoke_con_cb_list(tcb->handle, tcb->handle, 0, NULL, 0);
 
-    ret = pthread_create(&tcb->thid, NULL, client_cb, tcb);
+    ret = pthread_attr_init(&attr);
+    if (ret == 0) {
+	pattr = &attr;
+
+	ret = pthread_attr_setscope(pattr, PTHREAD_SCOPE_SYSTEM);
+	if (ret != 0) {
+	    ErrPrint("setscope: %s\n", strerror(ret));
+	}
+
+	ret = pthread_attr_setinheritsched(pattr, PTHREAD_EXPLICIT_SCHED);
+	if (ret != 0) {
+	    ErrPrint("setinheritsched: %s\n", strerror(ret));
+	}
+    } else {
+	ErrPrint("attr_init: %s\n", strerror(ret));
+    }
+    ret = pthread_create(&tcb->thid, pattr, client_cb, tcb);
+    if (pattr) {
+	pthread_attr_destroy(pattr);
+    }
     if (ret != 0) {
 	ErrPrint("Thread creation failed: %s\n", strerror(ret));
 	invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
@@ -669,6 +690,8 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
     int client_fd;
     struct tcb *tcb;
     int ret;
+    pthread_attr_t attr;
+    pthread_attr_t *pattr = NULL;
 
     client_fd = secure_socket_create_client(addr);
     if (client_fd < 0) {
@@ -723,7 +746,26 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 
     invoke_con_cb_list(tcb->handle, tcb->handle, 0, NULL, 0);
 
-    ret = pthread_create(&tcb->thid, NULL, client_cb, tcb);
+    ret = pthread_attr_init(&attr);
+    if (ret == 0) {
+	pattr = &attr;
+
+	ret = pthread_attr_setscope(pattr, PTHREAD_SCOPE_SYSTEM);
+	if (ret != 0) {
+	    ErrPrint("setscope: %s\n", strerror(ret));
+	}
+
+	ret = pthread_attr_setinheritsched(pattr, PTHREAD_EXPLICIT_SCHED);
+	if (ret != 0) {
+	    ErrPrint("setinheritsched: %s\n", strerror(ret));
+	}
+    } else {
+	ErrPrint("attr_init: %s\n", strerror(ret));
+    }
+    ret = pthread_create(&tcb->thid, pattr, client_cb, tcb);
+    if (pattr) {
+	pthread_attr_destroy(pattr);
+    }
     if (ret != 0) {
 	ErrPrint("Thread creation failed: %s\n", strerror(ret));
 	invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
