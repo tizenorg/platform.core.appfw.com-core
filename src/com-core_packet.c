@@ -284,7 +284,12 @@ static inline int packet_ready(int handle, struct recv_ctx *receive, struct meth
 		result = table[cmd_idx].handler(receive->pid, handle, receive->packet);
 		receive->inuse = 0;
 		if (result) {
-		    ret = s_info.vtable.send(handle, (void *)packet_data(result), packet_size(result), DEFAULT_TIMEOUT);
+		    if (packet_fd(result) >= 0) {
+			ret = s_info.vtable.send_with_fd(handle, (void *)packet_data(result), packet_size(result), DEFAULT_TIMEOUT, packet_fd(result));
+		    } else {
+			ret = s_info.vtable.send(handle, (void *)packet_data(result), packet_size(result), DEFAULT_TIMEOUT);
+		    }
+
 		    if (ret < 0) {
 			ErrPrint("Failed to send an ack packet\n");
 		    } else {
@@ -381,6 +386,7 @@ static int service_cb(int handle, void *data)
     int ret;
     int size;
     char *ptr;
+    int fd = -1;
 
     receive = find_recv_ctx(handle);
     if (!receive) {
@@ -407,7 +413,7 @@ static int service_cb(int handle, void *data)
 		return -ENOMEM;
 	    }
 
-	    ret = s_info.vtable.recv(handle, ptr, size, &pid, receive->timeout);
+	    ret = s_info.vtable.recv_with_fd(handle, ptr, size, &pid, receive->timeout, &fd);
 	    if (ret < 0) {
 		ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
 		free(ptr);
@@ -426,6 +432,14 @@ static int service_cb(int handle, void *data)
 		if (!receive->packet) {
 		    ErrPrint("Built packet is not valid\n");
 		    return -EFAULT; /*!< Return negative value will invoke the client_disconnected_cb */
+		}
+
+		if (fd >= 0) {
+		    if (packet_fd(receive->packet) >= 0) {
+			DbgPrint("Packet already has FD: %d (new: %d)\n", packet_fd(receive->packet), fd);
+		    }
+
+		    packet_set_fd(receive->packet, fd);
 		}
 
 		receive->offset += ret;
@@ -459,7 +473,7 @@ static int service_cb(int handle, void *data)
 		return -ENOMEM;
 	    }
 
-	    ret = s_info.vtable.recv(handle, ptr, size, &pid, receive->timeout);
+	    ret = s_info.vtable.recv_with_fd(handle, ptr, size, &pid, receive->timeout, &fd);
 	    if (ret < 0) {
 		ErrPrint("Recv[%d], pid[%d :: %d]\n", ret, receive->pid, pid);
 		free(ptr);
@@ -477,6 +491,14 @@ static int service_cb(int handle, void *data)
 		if (!receive->packet) {
 		    ErrPrint("Built packet is not valid\n");
 		    return -EFAULT;
+		}
+
+		if (fd >= 0) {
+		    if (packet_fd(receive->packet) >= 0) {
+			DbgPrint("Packet already has FD: %d (new: %d)\n", packet_fd(receive->packet), fd);
+		    }
+
+		    packet_set_fd(receive->packet, fd);
 		}
 
 		receive->offset += ret;
@@ -538,7 +560,11 @@ EAPI int com_core_packet_async_send(int handle, struct packet *packet, double ti
     ctx->data = data;
     ctx->packet = packet_ref(packet);
 
-    ret = s_info.vtable.send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+    if (packet_fd(packet) >= 0) {
+	ret = s_info.vtable.send_with_fd(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT, packet_fd(packet));
+    } else {
+	ret = s_info.vtable.send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+    }
     if (ret != packet_size(packet)) {
 	ErrPrint("Send failed. %d <> %d (handle: %d)\n", ret, packet_size(packet), handle);
 	destroy_request_ctx(ctx);
@@ -557,7 +583,11 @@ EAPI int com_core_packet_send_only(int handle, struct packet *packet)
 	return -EINVAL;
     }
 
-    ret = s_info.vtable.send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+    if (packet_fd(packet) >= 0) {
+	ret = s_info.vtable.send_with_fd(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT, packet_fd(packet));
+    } else {
+	ret = s_info.vtable.send(handle, (void *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+    }
     if (ret != packet_size(packet)) {
 	ErrPrint("Failed to send whole packet\n");
 	return -EIO;
@@ -575,6 +605,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
     struct packet *result = NULL;
     void *ptr;
     int size;
+    int recv_fd = -1;
 
     if (!addr || !packet) {
 	ErrPrint("Invalid argument\n");
@@ -594,7 +625,11 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	ErrPrint("Error: %s\n", strerror(errno));
     }
 
-    ret = com_core_send(fd, (char *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+    if (packet_fd(packet) >= 0) {
+	ret = com_core_send_with_fd(fd, (char *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT, packet_fd(packet));
+    } else {
+	ret = com_core_send(fd, (char *)packet_data(packet), packet_size(packet), DEFAULT_TIMEOUT);
+    }
     if (ret < 0) {
 	goto out;
     }
@@ -606,7 +641,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
     }
 
     offset = 0;
-    ret = com_core_recv(fd, (char *)ptr, packet_header_size(), &pid, timeout);
+    ret = com_core_recv_with_fd(fd, (char *)ptr, packet_header_size(), &pid, timeout, &recv_fd);
     if (ret <= 0) {
 	DbgPrint("Recv returns %d\n", ret);
 	free(ptr);
@@ -619,6 +654,14 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	if (!result) {
 	    ErrPrint("Failed to build a packet\n");
 	    goto out;
+	}
+
+	if (recv_fd >= 0) {
+	    if (packet_fd(result) >= 0) {
+		DbgPrint("Packet already has FD: %d (new: %d)\n", packet_fd(result), recv_fd);
+	    }
+
+	    packet_set_fd(result, recv_fd);
 	}
     }
 
@@ -642,7 +685,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	goto out;
     }
 
-    ret = com_core_recv(fd, (char *)ptr, size, &pid, timeout);
+    ret = com_core_recv_with_fd(fd, (char *)ptr, size, &pid, timeout, &recv_fd);
     if (ret <= 0) {
 	DbgPrint("Recv returns %d\n", ret);
 	free(ptr);
@@ -653,6 +696,14 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 	result = packet_build(result, offset, ptr, ret);
 	offset += ret;
 	free(ptr);
+
+	if (result && recv_fd >= 0) {
+	    if (packet_fd(result) >= 0) {
+		DbgPrint("Packet already has FD: %d (new: %d)\n", packet_fd(result), recv_fd);
+	    }
+
+	    packet_set_fd(result, recv_fd);
+	}
     }
 
 out:

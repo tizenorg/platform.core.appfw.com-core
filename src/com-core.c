@@ -303,7 +303,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer cbdata)
     g_io_channel_set_close_on_unref(gio, FALSE);
 
     id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)client_cb, cbdata);
-    if (id <= 0) {
+    if (id == 0) {
 	GError *err = NULL;
 
 	ErrPrint("Failed to add IO watch\n");
@@ -373,7 +373,7 @@ EAPI int com_core_server_create(const char *addr, int is_sync, int (*service_cb)
     g_io_channel_set_close_on_unref(gio, FALSE);
 
     id = g_io_add_watch(gio, G_IO_IN | G_IO_ERR | G_IO_HUP | G_IO_NVAL, (GIOFunc)accept_cb, cbdata);
-    if (id <= 0) {
+    if (id == 0) {
 	GError *err = NULL;
 	ErrPrint("Failed to add IO watch\n");
 	free(cbdata);
@@ -449,7 +449,7 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
     g_io_channel_set_close_on_unref(gio, FALSE);
 
     id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)client_cb, cbdata);
-    if (id <= 0) {
+    if (id == 0) {
 	GError *err = NULL;
 	ErrPrint("Failed to add IO watch\n");
 	free(cbdata);
