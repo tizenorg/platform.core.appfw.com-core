@@ -29,12 +29,6 @@ extern "C" {
 #define COM_CORE_LOCAL_SCHEME_LEN	(8)
 
 /*!
- * sdlocal:///tmp/.socket.file => /tmp/.socket.file
- */
-#define COM_CORE_SD_LOCAL_SCHEME	"sdlocal://"
-#define COM_CORE_SD_LOCAL_SCHEME_LEN	(10)
-
-/*!
  * remote://IPADDR:PORT
  * remote://:PORT	=> Using INADDR_ANY in this case
  */
@@ -42,32 +36,83 @@ extern "C" {
 #define COM_CORE_REMOTE_SCHEME_LEN	(9)
 
 /*
- * Create client connection
+ * sdlocal:///tmp/.socket.file => /tmp/.socket.file
+ */
+#define COM_CORE_SD_LOCAL_SCHEME	"sdlocal://"
+#define COM_CORE_SD_LOCAL_SCHEME_LEN	(10)
+
+/*!
+ * \brief Create client connection
+ * \details N/A
+ * \remarks N/A
+ * \param[in] peer
+ * \return int
+ * \retval
+ * \sa
  */
 extern int secure_socket_create_client(const char *peer);
 
-/*
- * Create server connection
+/*!
+ * \brief Create server connection
+ * \details N/A
+ * \remarks N/A
+ * \param[in] peer
+ * \return int
+ * \retval
+ * \sa
  */
 extern int secure_socket_create_server(const char *peer);
 
-/*
- * Get the raw handle to use it for non-blocking mode.
+/*!
+ * \brief Get the raw handle to use it for non-blocking mode.
+ * \details N/A
+ * \remarks N/A
+ * \param[in] server_handle
+ * \return int
+ * \retval
+ * \sa
  */
 extern int secure_socket_get_connection_handle(int server_handle);
 
-/*
- * Send data to the connected peer.
+/*!
+ * \brief Send data to the connected peer.
+ * \details N/A
+ * \remarks N/A
+ * \param[in] conn
+ * \param[in] buffer
+ * \param[in] size
+ * \param[in] fd Shared fd which will be used from receiver process.
+ * \return int
+ * \retval
+ * \sa
  */
 extern int secure_socket_send(int conn, const char *buffer, int size);
+extern int secure_socket_send_with_fd(int handle, const char *buffer, int size, int fd);
 
-/*
- * Recv data from the connected peer. and its PID value
+/*!
+ * \brief Recv data from the connected peer. and its PID value
+ * \details N/A
+ * \remarks N/A
+ * \param[in] connn
+ * \param[out] buffer
+ * \param[in] size
+ * \param[out] sender_pid
+ * \param[out] fd  shared fd which is comes from sender process.
+ * \return int
+ * \retval
+ * \sa
  */
 extern int secure_socket_recv(int conn, char *buffer, int size, int *sender_pid);
+extern int secure_socket_recv_with_fd(int conn, char *buffer, int size, int *sender_pid, int *fd);
 
-/*
- * Destroy a connection
+/*!
+ * \brief Destroy a connection
+ * \details N/A
+ * \remarks N/A
+ * \param[in] conn
+ * \return int
+ * \retval
+ * \sa
  */
 extern int secure_socket_destroy_handle(int conn);
 

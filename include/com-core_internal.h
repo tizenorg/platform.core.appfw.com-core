@@ -15,7 +15,7 @@
  *
 */
 
-extern void invoke_con_cb_list(int handle);
-extern void invoke_disconn_cb_list(int handle);
+extern void invoke_con_cb_list(int server_fd, int handle, guint id, void *data, int watch);
+extern void invoke_disconn_cb_list(int handle, int remove_id, int remove_data, int watch);
 
 /* End of a file */
