@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
-*/
+ */
 
 #define _GNU_SOURCE
 #include <stdio.h>
@@ -459,13 +459,18 @@ static struct packet *service_handler(int handle, pid_t pid, const struct packet
 	}
 
 	result = NULL;
-	for (i = 0; table[i].cmd; i++) {
-		if (strcmp(table[i].cmd, packet_command(packet))) {
-			continue;
-		}
 
-		result = table[i].handler(pid, handle, packet);
-		break;
+	const char *cmd = packet_command(packet);
+	if (cmd) {
+		for (i = 0; table[i].cmd; i++) {
+
+			if (strcmp(table[i].cmd, cmd)) {
+				continue;
+			}
+
+			result = table[i].handler(pid, handle, packet);
+			break;
+		}
 	}
 
 	return result;

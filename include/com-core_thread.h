@@ -23,7 +23,7 @@ extern "C" {
 #endif
 
 extern int com_core_thread_client_create(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data);
-extern int com_core_thread_server_create(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data);
+extern int com_core_thread_server_create(const char *addr, int is_sync, const char *label, int (*service_cb)(int fd, void *data), void *data);
 
 extern int com_core_thread_server_destroy(int handle);
 extern int com_core_thread_client_destroy(int handle);

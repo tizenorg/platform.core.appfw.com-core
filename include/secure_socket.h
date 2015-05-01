@@ -64,6 +64,18 @@ extern int secure_socket_create_client(const char *peer);
 extern int secure_socket_create_server(const char *peer);
 
 /*!
+ * \brief Create server connection
+ * \details N/A
+ * \remarks N/A
+ * \param[in] peer
+ * \return int
+ * \retval
+ * \sa
+ */
+extern int secure_socket_create_server_with_permission(const char *peer, const char *label);
+
+
+/*!
  * \brief Get the raw handle to use it for non-blocking mode.
  * \details N/A
  * \remarks N/A

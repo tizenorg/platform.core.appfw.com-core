@@ -1,12 +1,13 @@
 Name: libcom-core
 Summary: Library for the light-weight IPC 
-Version: 0.7.0
+Version: 1.0.0
 Release: 1
 Group: Base/IPC
 License: Apache-2.0
 Source0: %{name}-%{version}.tar.gz
 Source1001: 	%{name}.manifest
 BuildRequires: cmake, gettext-tools, coreutils
+BuildRequires: libattr-devel
 BuildRequires: pkgconfig(dlog)
 BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: pkgconfig(libsystemd-daemon)

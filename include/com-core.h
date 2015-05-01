@@ -39,7 +39,7 @@ enum com_core_event_type {
  * \retval
  * \sa
  */
-extern int com_core_server_create(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data);
+extern int com_core_server_create(const char *addr, int is_sync, const char *label, int (*service_cb)(int fd, void *data), void *data);
 
 /*!
  * \brief

@@ -107,6 +107,18 @@ extern int com_core_packet_server_init(const char *addr, struct method *table);
  * \brief
  * \details N/A
  * \remarks N/A
+ * \param[in] addr
+ * \param[in] table
+ * \return int
+ * \retval
+ * \sa
+ */
+extern int com_core_packet_server_init_with_permission(const char *addr, struct method *table, const char *label);
+
+/*!
+ * \brief
+ * \details N/A
+ * \remarks N/A
  * \param[in] handle
  * \return int
  * \retval
