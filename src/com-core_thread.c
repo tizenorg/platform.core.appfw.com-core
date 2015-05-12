@@ -187,7 +187,7 @@ static inline void terminate_thread(struct tcb *tcb)
 	if (status != 0) {
 		ErrPrint("Join: %s\n", strerror(status));
 	} else {
-		ErrPrint("Thread returns: %d\n", (int)res);
+		ErrPrint("Thread returns: %p\n", res);
 	}
 
 	dlist_foreach_safe(tcb->chunk_list, l, n, chunk) {
