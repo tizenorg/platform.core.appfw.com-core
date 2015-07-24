@@ -51,6 +51,7 @@ static struct info {
 	struct {
 		int (*server_create)(const char *addr, int is_sync, const char *label, int (*service_cb)(int fd, void *data), void *data);
 		int (*client_create)(const char *addr, int is_sync, int (*service_cb)(int fd, void *data), void *data);
+		int (*client_create_by_fd)(int fd, int is_sync, int (*service_cb)(int fd, void *data), void *data);
 		int (*server_destroy)(int handle);
 		int (*client_destroy)(int handle);
 
@@ -69,6 +70,7 @@ static struct info {
 	.vtable = {
 		.server_create = com_core_server_create,
 		.client_create = com_core_client_create,
+		.client_create_by_fd = com_core_client_create_by_fd,
 		.server_destroy = com_core_server_destroy,
 		.client_destroy = com_core_client_destroy,
 		.recv = com_core_recv,
@@ -412,7 +414,7 @@ static int service_cb(int handle, void *data)
 		 */
 		ptr = malloc(size);
 		if (!ptr) {
-			ErrPrint("Heap: %s\n", strerror(errno));
+			ErrPrint("Heap: %s (%d)\n", strerror(errno), size);
 			return -ENOMEM;
 		}
 
@@ -472,7 +474,7 @@ static int service_cb(int handle, void *data)
 		 */
 		ptr = malloc(size);
 		if (!ptr) {
-			ErrPrint("Heap: %s\n", strerror(errno));
+			ErrPrint("Heap: %s (%d)\n", strerror(errno), size);
 			return -ENOMEM;
 		}
 
@@ -639,7 +641,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 
 	ptr = malloc(packet_header_size());
 	if (!ptr) {
-		ErrPrint("Heap: %s\n", strerror(errno));
+		ErrPrint("Heap: %s (%d)\n", strerror(errno), packet_header_size());
 		goto out;
 	}
 
@@ -650,7 +652,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 		free(ptr);
 		goto out;
 	} else {
-		DbgPrint("Recv'd size: %d (header: %d) pid: %d\n", ret, packet_header_size(), pid);
+		DbgPrint("Recv'd size: %d (header: %d) pid: %d, fd: %d\n", ret, packet_header_size(), pid, recv_fd);
 		result = packet_build(result, offset, ptr, ret);
 		offset += ret;
 		free(ptr);
@@ -664,6 +666,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 				DbgPrint("Packet already has FD: %d (new: %d)\n", packet_fd(result), recv_fd);
 			}
 
+			DbgPrint("Update FD: %d\n", recv_fd);
 			packet_set_fd(result, recv_fd);
 		}
 	}
@@ -682,7 +685,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 
 	ptr = malloc(size);
 	if (!ptr) {
-		ErrPrint("Heap: %s\n", strerror(errno));
+		ErrPrint("Heap: %s (%d)\n", strerror(errno), size);
 		packet_destroy(result);
 		result = NULL;
 		goto out;
@@ -695,7 +698,7 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 		packet_destroy(result);
 		result = NULL;
 	} else {
-		DbgPrint("Recv'd %d bytes (pid: %d)\n", ret, pid);
+		DbgPrint("Recv'd %d bytes (pid: %d), fd: %d\n", ret, pid, recv_fd);
 		result = packet_build(result, offset, ptr, ret);
 		offset += ret;
 		free(ptr);
@@ -705,13 +708,14 @@ EAPI struct packet *com_core_packet_oneshot_send(const char *addr, struct packet
 				DbgPrint("Packet already has FD: %d (new: %d)\n", packet_fd(result), recv_fd);
 			}
 
+			DbgPrint("Update FD: %d\n", recv_fd);
 			packet_set_fd(result, recv_fd);
 		}
 	}
 
 out:
 	secure_socket_destroy_handle(fd);
-	DbgPrint("Close connection: %d\n", fd);
+	DbgPrint("Close connection: %d (recv_fd: %d)\n", fd, recv_fd);
 	return result;
 }
 
@@ -748,6 +752,23 @@ EAPI int com_core_packet_client_init(const char *addr, int is_sync, struct metho
 	}
 
 	ret = s_info.vtable.client_create(addr, is_sync, service_cb, table);
+	if (ret < 0) {
+		com_core_packet_fini();
+	}
+
+	return ret;
+}
+
+EAPI int com_core_packet_client_init_by_fd(int fd, int is_sync, struct method *table)
+{
+	int ret;
+
+	ret = com_core_packet_init();
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = s_info.vtable.client_create_by_fd(fd, is_sync, service_cb, table);
 	if (ret < 0) {
 		com_core_packet_fini();
 	}
@@ -796,6 +817,10 @@ EAPI int com_core_packet_server_init_with_permission(const char *addr, struct me
 	return ret;
 }
 
+EAPI void com_core_packet_server_disconnect_handle(int handle)
+{
+	s_info.vtable.server_destroy(handle);
+}
 
 EAPI int com_core_packet_server_fini(int handle)
 {
@@ -814,6 +839,7 @@ EAPI void com_core_packet_use_thread(int flag)
 	if (!!flag) {
 		s_info.vtable.server_create = com_core_thread_server_create;
 		s_info.vtable.client_create = com_core_thread_client_create;
+		s_info.vtable.client_create_by_fd = com_core_thread_client_create_by_fd;
 		s_info.vtable.server_destroy = com_core_thread_server_destroy;
 		s_info.vtable.client_destroy = com_core_thread_client_destroy;
 		s_info.vtable.recv = com_core_thread_recv;
@@ -823,6 +849,7 @@ EAPI void com_core_packet_use_thread(int flag)
 	} else {
 		s_info.vtable.server_create = com_core_server_create;
 		s_info.vtable.client_create = com_core_client_create;
+		s_info.vtable.client_create_by_fd = com_core_client_create_by_fd;
 		s_info.vtable.server_destroy = com_core_server_destroy;
 		s_info.vtable.client_destroy = com_core_client_destroy;
 		s_info.vtable.recv = com_core_recv;

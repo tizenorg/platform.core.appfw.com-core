@@ -80,6 +80,17 @@ extern struct packet *com_core_packet_oneshot_send(const char *addr, struct pack
  */
 extern int com_core_packet_client_init(const char *addr, int is_sync, struct method *table);
 
+/**
+ * @brief
+ * @details
+ * @remarks
+ * @param[in]
+ * @return int
+ * @retval
+ * @sa
+ */
+extern int com_core_packet_client_init_by_fd(int fd, int is_sync, struct method *table);
+
 /*!
  * \brief
  * \details N/A
@@ -125,6 +136,7 @@ extern int com_core_packet_server_init_with_permission(const char *addr, struct 
  * \sa
  */
 extern int com_core_packet_server_fini(int handle);
+extern void com_core_packet_server_disconnect_handle(int handle);
 
 /*!
  * \brief

@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include <dlog.h>
 
@@ -41,7 +42,6 @@ struct data {
 		unsigned long source;
 		unsigned long destination;
 		unsigned long mask;
-		int fd;
 	} head;
 
 	char payload[];
@@ -53,6 +53,9 @@ struct packet {
 		INVALID = 0xdeaddead
 	} state;
 	int refcnt;
+	void (*close_fd_cb)(int fd, void *data);
+	void *close_fd_cbdata;
+	int fd;
 	struct data *data;
 };
 
@@ -128,7 +131,7 @@ EAPI int packet_set_fd(struct packet *packet, int fd)
 		return -EINVAL;
 	}
 
-	packet->data->head.fd = fd;
+	packet->fd = fd;
 	return 0;
 }
 
@@ -138,7 +141,18 @@ EAPI int packet_fd(const struct packet *packet)
 		return -EINVAL;
 	}
 
-	return packet->data->head.fd;
+	return packet->fd;
+}
+
+EAPI int packet_set_fd_close_handler_on_destroy(struct packet *packet, void (*close_cb)(int fd, void *data), void *data)
+{
+	if (!packet || packet->state != VALID || !packet->data) {
+		return -EINVAL;
+	}
+
+	packet->close_fd_cb = close_cb;
+	packet->close_fd_cbdata = data;
+	return 0;
 }
 
 EAPI const unsigned long const packet_destination(const struct packet *packet)
@@ -348,6 +362,9 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 
 	payload_size = sizeof(*result->data) + BUFSIZ;
 	result->refcnt = 0;
+	result->fd = -1;
+	result->close_fd_cb = NULL;
+	result->close_fd_cbdata = NULL;
 	result->data = calloc(1, payload_size);
 	if (!result->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
@@ -360,11 +377,9 @@ EAPI struct packet *packet_create_reply(const struct packet *packet, const char 
 	result->data->head.source = packet->data->head.destination;
 	result->data->head.destination = packet->data->head.source;
 	result->data->head.mask = 0xFFFFFFFF;
-
 	result->data->head.seq = packet->data->head.seq;
 	result->data->head.type = PACKET_ACK;
 	result->data->head.version = packet->data->head.version;
-	result->data->head.fd = -1;
 	if (packet->data->head.command[0] == PACKET_CMD_INT_TAG) {
 		unsigned int *head_cmd = (unsigned int *)result->data->head.command;
 		unsigned int *packet_cmd = (unsigned int *)packet->data->head.command;
@@ -417,6 +432,9 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 
 	payload_size = sizeof(*packet->data) + BUFSIZ;
 	packet->refcnt = 0;
+	packet->fd = -1;
+	packet->close_fd_cb = NULL;
+	packet->close_fd_cbdata = NULL;
 	packet->data = calloc(1, payload_size);
 	if (!packet->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
@@ -432,7 +450,6 @@ EAPI struct packet *packet_create(const char *cmd, const char *fmt, ...)
 	packet->data->head.seq = util_timestamp();
 	packet->data->head.type = PACKET_REQ;
 	packet->data->head.version = PACKET_VERSION;
-	packet->data->head.fd = -1;
 	if (cmd[0] == PACKET_CMD_INT_TAG) {
 		unsigned int *head_cmd = (unsigned int *)packet->data->head.command;
 		unsigned int *in_cmd = (unsigned int *)cmd;
@@ -470,6 +487,9 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 
 	payload_size = sizeof(*result->data) + BUFSIZ;
 	result->refcnt = 0;
+	result->fd = -1;
+	result->close_fd_cb = NULL;
+	result->close_fd_cbdata = NULL;
 	result->data = calloc(1, payload_size);
 	if (!result->data) {
 		ErrPrint("Heap: %s\n", strerror(errno));
@@ -485,7 +505,6 @@ EAPI struct packet *packet_create_noack(const char *cmd, const char *fmt, ...)
 	result->data->head.seq = util_timestamp();
 	result->data->head.type = PACKET_REQ_NOACK;
 	result->data->head.version = PACKET_VERSION;
-	result->data->head.fd = -1;
 	if (cmd[0] == PACKET_CMD_INT_TAG) {
 		unsigned int *head_cmd = (unsigned int *)result->data->head.command;
 		unsigned int *cmd_in = (unsigned int *)cmd;
@@ -590,6 +609,10 @@ EAPI struct packet *packet_unref(struct packet *packet)
 	}
 
 	if (packet->refcnt == 0) {
+		if (packet->close_fd_cb && packet->fd >= 0) {
+			packet->close_fd_cb(packet->fd, packet->close_fd_cbdata);
+		}
+
 		packet->state = INVALID;
 		free(packet->data);
 		free(packet);
@@ -622,6 +645,9 @@ EAPI struct packet *packet_build(struct packet *packet, int offset, void *data, 
 		}
 
 		packet->refcnt = 1;
+		packet->fd = -1;
+		packet->close_fd_cb = NULL;
+		packet->close_fd_cbdata = NULL;
 		packet->data = calloc(1, size);
 		if (!packet->data) {
 			ErrPrint("Heap: %s\n", strerror(errno));

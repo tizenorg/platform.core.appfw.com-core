@@ -379,6 +379,7 @@ extern struct packet *packet_build(struct packet *packet, int offset, void *data
 
 extern int packet_fd(const struct packet *packet);
 extern int packet_set_fd(struct packet *packet, int fd);
+extern int packet_set_fd_close_handler_on_destroy(struct packet *packet, void (*close_cb)(int fd, void *data), void *data);
 
 #ifdef __cplusplus
 }

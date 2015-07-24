@@ -43,8 +43,9 @@
 
 enum scheme {
 	SCHEME_LOCAL = 0x00,
-	SCHEME_REMOTE = 0x01,
-	SCHEME_UNKNOWN = 0x02,
+	SCHEME_SDLOCAL = 0x01,
+	SCHEME_REMOTE = 0x02,
+	SCHEME_UNKNOWN = 0x03,
 };
 
 struct function_table {
@@ -110,19 +111,21 @@ static inline int create_inet_socket(const char *peer, int port, struct sockaddr
 
 static inline int create_systemd_socket(const char *peer, int port, struct sockaddr *addr)
 {
-	int handle = -1;
+	int handle;
 	int cnt;
 
 	cnt = sd_listen_fds(0);
-	if (cnt > 1) {
-		ErrPrint("To many file descriptors are received on socket activation: %d\n", cnt);
-	} else if (cnt == 1) {
-		handle = SD_LISTEN_FDS_START + 0;
-	} else {
-		handle = create_inet_socket(peer, port, addr);
+	DbgPrint("Usable socket %s cnt[%d]\n", peer, cnt);
+
+	for (handle = SD_LISTEN_FDS_START; handle < SD_LISTEN_FDS_START + cnt; ++handle) {
+		if (sd_is_socket_unix(handle, SOCK_STREAM, 1, peer, 0) > 0) {
+			DbgPrint("Usable socket %s was passed by SystemD under descriptor %d\n", peer, handle);
+			return handle;
+		}
 	}
 
-	return handle;
+	DbgPrint("Not found socket: %s\n", peer);
+	return -1;
 }
 
 static inline int setup_unix_handle(int handle)
@@ -176,7 +179,7 @@ static inline char *parse_scheme(const char *peer, int *port, struct function_ta
 		vtable->create_socket = create_unix_socket;
 		vtable->setup_handle = setup_unix_handle;
 	} else if (!strncasecmp(peer, COM_CORE_SD_LOCAL_SCHEME, COM_CORE_SD_LOCAL_SCHEME_LEN)) {
-		vtable->type = (int)SCHEME_LOCAL;
+		vtable->type = (int)SCHEME_SDLOCAL;
 		peer += COM_CORE_SD_LOCAL_SCHEME_LEN;
 
 		addr = strdup(peer);
@@ -259,6 +262,7 @@ EAPI int secure_socket_create_client(const char *peer)
 
 	switch (vtable.type) {
 	case SCHEME_LOCAL:
+	case SCHEME_SDLOCAL:
 		sockaddr = (struct sockaddr *)&un_addr;
 		addrlen = sizeof(un_addr);
 		break;
@@ -277,16 +281,23 @@ EAPI int secure_socket_create_client(const char *peer)
 		return handle;
 	}
 
-	ret = connect(handle, sockaddr, addrlen);
-	if (ret < 0) {
-		ret = -errno;
-		ErrPrint("Failed to connect to server [%s] %s\n",
-				peer, strerror(errno));
-		if (close(handle) < 0) {
-			ErrPrint("close: %s\n", strerror(errno));
-		}
+	/**
+	 * @note
+	 * In case of a FD which is activated by systemd,
+	 * Does not need to do connecting.
+	 * It will be already connected.
+	 */
+	if (vtable.type != SCHEME_SDLOCAL) {
+		ret = connect(handle, sockaddr, addrlen);
+		if (ret < 0) {
+			ret = -errno;
+			ErrPrint("Failed to connect to server [%s] %s\n", peer, strerror(errno));
+			if (close(handle) < 0) {
+				ErrPrint("close: %s\n", strerror(errno));
+			}
 
-		return ret;
+			return ret;
+		}
 	}
 
 	ret = vtable.setup_handle(handle);
@@ -326,6 +337,7 @@ EAPI int secure_socket_create_server_with_permission(const char *peer, const cha
 
 	switch (vtable.type) {
 	case SCHEME_LOCAL:
+	case SCHEME_SDLOCAL:
 		sockaddr = (struct sockaddr *)&un_addr;
 		addrlen = sizeof(un_addr);
 		break;
@@ -344,8 +356,19 @@ EAPI int secure_socket_create_server_with_permission(const char *peer, const cha
 		return handle;
 	}
 
-
 	if (label) {
+		/**
+		 * @note
+		 * Maybe this code will not work for FD from systemd.
+		 * These functions should be done before "bind" and the systemd will do "bind" already. (maybe)
+		 * Then these functions are not working on it.
+		 * But I just leave it on here. ;)
+		 *
+		 * In case of the Tizen, they have security server which maintains all security related functionalities.
+		 * So this API(fsetxattr) will not work in the Tizen.
+		 * But if you are using this package for the other platform, like general linux system,
+		 * It will work for you. But It just my expectation not tested.. ;)
+		 */
 		if (fsetxattr(handle, "security.SMACK64IPIN", label, strlen(label), 0) < 0) {
 			ErrPrint("Failed to set SMACK label[%s] [%s]\n", label, strerror(errno));
 		}
@@ -353,6 +376,15 @@ EAPI int secure_socket_create_server_with_permission(const char *peer, const cha
 		if (fsetxattr(handle, "security.SMACK64IPOUT", label, strlen(label), 0) < 0) {
 			ErrPrint("Failed to set SMACK label[%s] [%s]\n", label, strerror(errno));
 		}
+	}
+
+	/**
+	 * @note
+	 * If the handle is created by systemd,
+	 * We should not touch it anymore after gettting FD from sd library.
+	 */
+	if (vtable.type == SCHEME_SDLOCAL) {
+		return handle;
 	}
 
 	ret = bind(handle, sockaddr, addrlen);
@@ -479,7 +511,7 @@ EAPI int secure_socket_send_with_fd(int handle, const char *buffer, int size, in
 			ErrPrint("handle[%d] size[%d] Try again [%s]\n", handle, size, strerror(errno));
 			return -EAGAIN;
 		}
-		ErrPrint("Failed to send message [%s]\n", strerror(errno));
+		ErrPrint("Failed to send message [%s], handle(%d)\n", strerror(errno), handle);
 		return ret;
 	}
 
@@ -496,8 +528,9 @@ EAPI int secure_socket_recv_with_fd(int handle, char *buffer, int size, int *sen
 	struct msghdr msg;
 	struct cmsghdr *cmsg;
 	struct iovec iov;
-	char control[1024];
+	char control[128];
 	int _pid;
+	int _fd;
 	int ret;
 
 	if (size <= 0 || !buffer) {
@@ -506,6 +539,10 @@ EAPI int secure_socket_recv_with_fd(int handle, char *buffer, int size, int *sen
 
 	if (!sender_pid) {
 		sender_pid = &_pid;
+	}
+
+	if (!fd) {
+		fd = &_fd;
 	}
 
 	memset(&msg, 0, sizeof(msg));
@@ -517,12 +554,6 @@ EAPI int secure_socket_recv_with_fd(int handle, char *buffer, int size, int *sen
 	msg.msg_controllen = sizeof(control);
 
 	ret = recvmsg(handle, &msg, 0);
-	if (ret == 0) {
-		/*!< Disconnected */
-		DbgPrint("Disconnected\n");
-		return 0;
-	}
-
 	if (ret < 0) {
 		ret = -errno;
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -534,7 +565,14 @@ EAPI int secure_socket_recv_with_fd(int handle, char *buffer, int size, int *sen
 		return ret;
 	}
 
+	if ((msg.msg_flags & MSG_CTRUNC) == MSG_CTRUNC) {
+		ErrPrint("Controll buffer is too short (%d): %d, %d\n", msg.msg_controllen, size, sizeof(control));
+	} else if (msg.msg_flags) {
+		DbgPrint("Flags: %X\n", msg.msg_flags);
+	}
+
 	*sender_pid = -1;	/* In case of remote socket, cannot delivery this */ 
+	*fd = -1;
 	cmsg = CMSG_FIRSTHDR(&msg);
 	while (cmsg) {
 		if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_CREDENTIALS) {
@@ -542,16 +580,37 @@ EAPI int secure_socket_recv_with_fd(int handle, char *buffer, int size, int *sen
 
 			cred = (struct ucred *)CMSG_DATA(cmsg);
 			*sender_pid = cred->pid;
-		} else if (fd && cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
+		} else if (cmsg->cmsg_level == SOL_SOCKET && cmsg->cmsg_type == SCM_RIGHTS) {
 			int *cdata;
+			int count;
+
+			count = cmsg->cmsg_len / CMSG_LEN(sizeof(int));
 			cdata = (int *)CMSG_DATA(cmsg);
-			*fd = *cdata;
+			if (count > 1 || &_fd == fd) {
+				int i;
+
+				ErrPrint("Unawared controll data. discards all\n");
+				for (i = 0; i < count; i++) {
+					if (close(cdata[i]) < 0) {
+						ErrPrint("close: %d\n", errno);
+					}
+				}
+			} else {
+				*fd = *cdata;
+			}
+		} else {
+			DbgPrint("Unknown message type\n");
 		}
 
 		cmsg = CMSG_NXTHDR(&msg, cmsg);
 	}
 
-	return iov.iov_len;
+	if (ret == 0) {
+		/*!< Disconnected */
+		DbgPrint("Disconnected\n");
+	}
+
+	return ret == 0 ? 0 : iov.iov_len;
 }
 
 EAPI int secure_socket_recv(int handle, char *buffer, int size, int *sender_pid)

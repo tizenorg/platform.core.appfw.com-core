@@ -469,6 +469,65 @@ EAPI int com_core_client_create(const char *addr, int is_sync, int (*service_cb)
 	return client_fd;
 }
 
+EAPI int com_core_client_create_by_fd(int client_fd, int is_sync, int (*service_cb)(int fd, void *data), void *data)
+{
+	GIOChannel *gio;
+	guint id;
+	struct cbdata *cbdata;
+
+	if (!validate_handle(client_fd)) {
+		ErrPrint("Invalid handle: %d\n", client_fd);
+		return -EINVAL;
+	}
+
+	cbdata = malloc(sizeof(*cbdata));
+	if (!cbdata) {
+		ErrPrint("Heap: %s\n", strerror(errno));
+		return -ENOMEM;
+	}
+
+	cbdata->service_cb = service_cb;
+	cbdata->data = data;
+
+	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0) {
+		ErrPrint("Error: %s\n", strerror(errno));
+	}
+
+	if (!is_sync && fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
+		ErrPrint("Error: %s\n", strerror(errno));
+	}
+
+	gio = g_io_channel_unix_new(client_fd);
+	if (!gio) {
+		ErrPrint("Failed to create a new IO channel\n");
+		free(cbdata);
+		secure_socket_destroy_handle(client_fd);
+		return -EIO;
+	}
+
+	g_io_channel_set_close_on_unref(gio, FALSE);
+
+	id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)client_cb, cbdata);
+	if (id == 0) {
+		GError *err = NULL;
+		ErrPrint("Failed to add IO watch\n");
+		free(cbdata);
+		g_io_channel_shutdown(gio, TRUE, &err);
+		if (err) {
+			ErrPrint("Shutdown: %s\n", err->message);
+			g_error_free(err);
+		}
+		g_io_channel_unref(gio);
+		secure_socket_destroy_handle(client_fd);
+		return -EIO;
+	}
+
+	g_io_channel_unref(gio);
+
+	invoke_con_cb_list(client_fd, client_fd, id, cbdata, 1);
+	return client_fd;
+}
+
 EAPI int com_core_add_event_callback(enum com_core_event_type type, int (*evt_cb)(int handle, void *data), void *data)
 {
 	struct evtdata *cbdata;

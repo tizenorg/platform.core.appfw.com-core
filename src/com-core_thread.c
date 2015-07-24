@@ -24,6 +24,8 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 #include <glib.h>
 
@@ -187,7 +189,7 @@ static inline void terminate_thread(struct tcb *tcb)
 	if (status != 0) {
 		ErrPrint("Join: %s\n", strerror(status));
 	} else {
-		ErrPrint("Thread returns: %p\n", res);
+		ErrPrint("Thread returns: %d\n", (int)res);
 	}
 
 	dlist_foreach_safe(tcb->chunk_list, l, n, chunk) {
@@ -704,6 +706,112 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 
 	if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
 		ErrPrint("Error: %s\n", strerror(errno));
+	}
+
+	tcb = tcb_create(client_fd, is_sync, service_cb, data);
+	if (!tcb) {
+		ErrPrint("Failed to create a new TCB\n");
+		secure_socket_destroy_handle(client_fd);
+		return -EFAULT;
+	}
+
+	tcb->server_handle = -1;
+
+	s_info.tcb_list = dlist_append(s_info.tcb_list, tcb);
+
+	gio = g_io_channel_unix_new(tcb->evt_pipe[PIPE_READ]);
+	if (!gio) {
+		ErrPrint("Failed to get gio\n");
+		secure_socket_destroy_handle(tcb->handle);
+		tcb_destroy(tcb);
+		return -EIO;
+	}
+
+	g_io_channel_set_close_on_unref(gio, FALSE);
+
+	tcb->id = g_io_add_watch(gio, G_IO_IN | G_IO_HUP | G_IO_ERR | G_IO_NVAL, (GIOFunc)evt_pipe_cb, tcb);
+	if (tcb->id == 0) {
+		GError *err = NULL;
+		ErrPrint("Failed to add IO Watch\n");
+		g_io_channel_shutdown(gio, TRUE, &err);
+		if (err) {
+			ErrPrint("Shutdown: %s\n", err->message);
+			g_error_free(err);
+		}
+		g_io_channel_unref(gio);
+		secure_socket_destroy_handle(tcb->handle);
+		tcb_destroy(tcb);
+		return -EIO;
+	}
+
+	g_io_channel_unref(gio);
+
+	invoke_con_cb_list(tcb->handle, tcb->handle, 0, NULL, 0);
+
+	ret = pthread_attr_init(&attr);
+	if (ret == 0) {
+		pattr = &attr;
+
+		ret = pthread_attr_setscope(pattr, PTHREAD_SCOPE_SYSTEM);
+		if (ret != 0) {
+			ErrPrint("setscope: %s\n", strerror(ret));
+		}
+
+		ret = pthread_attr_setinheritsched(pattr, PTHREAD_EXPLICIT_SCHED);
+		if (ret != 0) {
+			ErrPrint("setinheritsched: %s\n", strerror(ret));
+		}
+	} else {
+		ErrPrint("attr_init: %s\n", strerror(ret));
+	}
+	ret = pthread_create(&tcb->thid, pattr, client_cb, tcb);
+	if (pattr) {
+		pthread_attr_destroy(pattr);
+	}
+	if (ret != 0) {
+		ErrPrint("Thread creation failed: %s\n", strerror(ret));
+		invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
+		secure_socket_destroy_handle(tcb->handle);
+		tcb_destroy(tcb);
+		return -EFAULT;
+	}
+
+	return tcb->handle;
+}
+
+static int validate_handle(int fd)
+{
+	int error;
+	socklen_t len;
+
+	len = sizeof(error);
+	if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
+		ErrPrint("getsockopt: %s\n", strerror(errno));
+		return 0;
+	}
+
+	return !(error == EBADF);
+}
+
+EAPI int com_core_thread_client_create_by_fd(int client_fd, int is_sync, int (*service_cb)(int fd, void *data), void *data)
+{
+	GIOChannel *gio;
+	struct tcb *tcb;
+	int ret;
+	pthread_attr_t attr;
+	pthread_attr_t *pattr = NULL;
+
+	if (!validate_handle(client_fd)) {
+		ErrPrint("Invalid handle: %d\n", client_fd);
+		return -EINVAL;
+	}
+
+	if (fcntl(client_fd, F_SETFD, FD_CLOEXEC) < 0) {
+		ErrPrint("Error: %s (%d)\n", strerror(errno), client_fd);
+	}
+
+	if (fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
+		ErrPrint("Error: %s (%d)\n", strerror(errno), client_fd);
 	}
 
 	tcb = tcb_create(client_fd, is_sync, service_cb, data);
