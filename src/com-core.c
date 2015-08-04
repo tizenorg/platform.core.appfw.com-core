@@ -40,6 +40,7 @@ static struct {
 	struct dlist *watch_list;
 	struct dlist *conn_cb_list;
 	struct dlist *disconn_cb_list;
+	struct dlist *disconn_fd_list;
 	enum processing_event_callback {
 		PROCESSING_NONE = 0x0,
 		PROCESSING_DISCONNECTION = 0x01,
@@ -49,6 +50,7 @@ static struct {
 	.watch_list = NULL,
 	.conn_cb_list = NULL,
 	.disconn_cb_list = NULL,
+	.disconn_fd_list = NULL,
 	.processing_event_callback = PROCESSING_NONE,
 };
 
@@ -127,13 +129,18 @@ static void watch_item_destroy_all(int socket_fd)
 	dlist_foreach_safe(s_info.watch_list, l, n, item) {
 		if (item->server_fd == socket_fd) {
 			DbgPrint("Watch item removed: %d/%d\n", item->server_fd, item->fd);
-			/*!
-			 * \WARN
+			/**
+			 * @WARN
 			 * If the watch_list item is removed from disconnected
 			 * callback, this list loop can be broken.
 			 * Please check it again.
 			 */
-			invoke_disconn_cb_list(item->fd, 0, 0, 0);
+			(void)invoke_disconn_cb_list(item->fd, 0, 0, 0);
+			/**
+			 * @note
+			 * socket_fd will be closed by caller.
+			 * so we do not need to close it at here.
+			 */
 
 			s_info.watch_list = dlist_remove(s_info.watch_list, l);
 			if (item->id > 0) {
@@ -172,16 +179,34 @@ HAPI void invoke_con_cb_list(int server_fd, int handle, guint id, void *data, in
 	s_info.processing_event_callback &= ~PROCESSING_CONNECTION;
 }
 
-HAPI void invoke_disconn_cb_list(int handle, int remove_id, int remove_data, int watch)
+HAPI int invoke_disconn_cb_list(int handle, int remove_id, int remove_data, int watch)
 {
 	struct dlist *l;
 	struct dlist *n;
 	struct evtdata *cbdata;
+	void *item;
+
+	/**
+	 * @note
+	 * Basically, the disconnected handler will be called once.
+	 * But from the disconnected callback, someone calls fini(fd),
+	 * this disconnection callback can be called again.
+	 * So we have to check whether this is a nested call or not.
+	 * If it is a nested call, we should not do anything anymore.
+	 */
+	dlist_foreach_safe(s_info.disconn_fd_list, l, n, item) {
+		if (handle == (int)((long)item)) { /*!< Cast for 64 bits */
+			DbgPrint("nested destroyer %d\n", handle);
+			return 1;
+		}
+	}
+
+	s_info.disconn_fd_list = dlist_append(s_info.disconn_fd_list, (void *)((long)handle)); /*!< Cast for 64 bits */
 
 	s_info.processing_event_callback |= PROCESSING_DISCONNECTION;
 	dlist_foreach_safe(s_info.disconn_cb_list, l, n, cbdata) {
-		/*!
-		 * \NOTE
+		/**
+		 * @note
 		 * cbdata->deleted must has to be checked before call the function and
 		 * return from the function call.
 		 */
@@ -197,6 +222,9 @@ HAPI void invoke_disconn_cb_list(int handle, int remove_id, int remove_data, int
 			ErrPrint("Failed to destroy watch item\n");
 		}
 	}
+
+	dlist_remove_data(s_info.disconn_fd_list, (void *)((long)handle)); /*!< Cast for 64 bits */
+	return 0;
 }
 
 static int validate_handle(int fd)
@@ -223,14 +251,14 @@ static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 
 	if (!(cond & G_IO_IN)) {
 		DbgPrint("Client is disconencted\n");
-		invoke_disconn_cb_list(client_fd, 0, 1, 1);
+		(void)invoke_disconn_cb_list(client_fd, 0, 1, 1);
 		secure_socket_destroy_handle(client_fd);
 		return FALSE;
 	}
 
 	if ((cond & G_IO_ERR) || (cond & G_IO_HUP) || (cond & G_IO_NVAL)) {
 		DbgPrint("Client connection is lost\n");
-		invoke_disconn_cb_list(client_fd, 0, 1, 1);
+		(void)invoke_disconn_cb_list(client_fd, 0, 1, 1);
 		secure_socket_destroy_handle(client_fd);
 		return FALSE;
 	}
@@ -238,14 +266,14 @@ static gboolean client_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	ret = cbdata->service_cb(client_fd, cbdata->data);
 	if (ret < 0) {
 		DbgPrint("service callback returns %d < 0\n", ret);
-		invoke_disconn_cb_list(client_fd, 0, 1, 1);
+		(void)invoke_disconn_cb_list(client_fd, 0, 1, 1);
 		secure_socket_destroy_handle(client_fd);
 		return FALSE;
 	}
 
 	/* Check whether the socket FD is closed or not */
 	if (!validate_handle(client_fd)) {
-		invoke_disconn_cb_list(client_fd, 0, 1, 1);
+		(void)invoke_disconn_cb_list(client_fd, 0, 1, 1);
 		secure_socket_destroy_handle(client_fd);
 		return FALSE;
 	}
@@ -736,16 +764,18 @@ EAPI void *com_core_del_event_callback(enum com_core_event_type type, int (*cb)(
 EAPI int com_core_server_destroy(int handle)
 {
 	DbgPrint("Close server handle[%d]\n", handle);
-	invoke_disconn_cb_list(handle, 1, 1, 1);
-	secure_socket_destroy_handle(handle);
+	if (invoke_disconn_cb_list(handle, 1, 1, 1) == 0) {
+		secure_socket_destroy_handle(handle);
+	}
 	return 0;
 }
 
 EAPI int com_core_client_destroy(int handle)
 {
 	DbgPrint("Close client handle[%d]\n", handle);
-	invoke_disconn_cb_list(handle, 1, 1, 1);
-	secure_socket_destroy_handle(handle);
+	if (invoke_disconn_cb_list(handle, 1, 1, 1) == 0) {
+		secure_socket_destroy_handle(handle);
+	}
 	return 0;
 }
 

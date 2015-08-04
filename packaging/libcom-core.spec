@@ -1,6 +1,6 @@
 Name: libcom-core
-Summary: Library for the light-weight IPC 
-Version: 1.0.1
+Summary: Library for the light-weight IPC
+Version: 1.0.2
 Release: 1
 Group: Base/IPC
 License: Apache-2.0

@@ -189,7 +189,7 @@ static inline void terminate_thread(struct tcb *tcb)
 	if (status != 0) {
 		ErrPrint("Join: %s\n", strerror(status));
 	} else {
-		ErrPrint("Thread returns: %d\n", (int)res);
+		ErrPrint("Thread returns: %d\n", (int)((long)res));
 	}
 
 	dlist_foreach_safe(tcb->chunk_list, l, n, chunk) {
@@ -503,7 +503,7 @@ static gboolean evt_pipe_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 
 errout:
 	DbgPrint("Disconnecting\n");
-	invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
+	(void)invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
 	terminate_thread(tcb);
 	tcb_destroy(tcb);
 	return FALSE;
@@ -672,7 +672,7 @@ static gboolean accept_cb(GIOChannel *src, GIOCondition cond, gpointer data)
 	}
 	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
-		invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
+		(void)invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
 		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		server_destroy(server);
@@ -770,7 +770,7 @@ EAPI int com_core_thread_client_create(const char *addr, int is_sync, int (*serv
 	}
 	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
-		invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
+		(void)invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
 		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		return -EFAULT;
@@ -876,7 +876,7 @@ EAPI int com_core_thread_client_create_by_fd(int client_fd, int is_sync, int (*s
 	}
 	if (ret != 0) {
 		ErrPrint("Thread creation failed: %s\n", strerror(ret));
-		invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
+		(void)invoke_disconn_cb_list(tcb->handle, 0, 0, 0);
 		secure_socket_destroy_handle(tcb->handle);
 		tcb_destroy(tcb);
 		return -EFAULT;
@@ -1151,9 +1151,10 @@ EAPI int com_core_thread_server_destroy(int handle)
 			continue;
 		}
 
-		invoke_disconn_cb_list(handle, 0, 0, 0);
-		terminate_thread(tcb);
-		tcb_destroy(tcb);
+		if (invoke_disconn_cb_list(handle, 0, 0, 0) == 0) {
+			terminate_thread(tcb);
+			tcb_destroy(tcb);
+		}
 		return 0;
 	}
 
@@ -1162,8 +1163,9 @@ EAPI int com_core_thread_server_destroy(int handle)
 			continue;
 		}
 
-		invoke_disconn_cb_list(handle, 0, 0, 0);
-		server_destroy(server);
+		if (invoke_disconn_cb_list(handle, 0, 0, 0) == 0) {
+			server_destroy(server);
+		}
 		return 0;
 	}
 
@@ -1183,9 +1185,10 @@ EAPI int com_core_thread_client_destroy(int handle)
 		return -ENOENT;
 	}
 
-	invoke_disconn_cb_list(handle, 0, 0, 0);
-	terminate_thread(tcb);
-	tcb_destroy(tcb);
+	if (invoke_disconn_cb_list(handle, 0, 0, 0) == 0) {
+		terminate_thread(tcb);
+		tcb_destroy(tcb);
+	}
 	return 0;
 }
 

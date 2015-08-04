@@ -16,6 +16,12 @@
 */
 
 extern void invoke_con_cb_list(int server_fd, int handle, guint id, void *data, int watch);
-extern void invoke_disconn_cb_list(int handle, int remove_id, int remove_data, int watch);
+
+/**
+ * @note
+ * This function will returns 0 if it is processed peacefully,
+ * But 1 will be returned if it is already called. (in case of the nested call)
+ */
+extern int invoke_disconn_cb_list(int handle, int remove_id, int remove_data, int watch);
 
 /* End of a file */
