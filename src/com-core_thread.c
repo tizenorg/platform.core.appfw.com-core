@@ -208,7 +208,7 @@ static inline void terminate_thread(struct tcb *tcb)
  */
 static inline void chunk_remove(struct tcb *tcb, struct chunk *chunk)
 {
-	char event_ch;
+	signed char event_ch;
 
 	/* Consuming the event */
 	if (read(tcb->evt_pipe[PIPE_READ], &event_ch, sizeof(event_ch)) != sizeof(event_ch)) {
@@ -231,7 +231,7 @@ static inline void chunk_remove(struct tcb *tcb, struct chunk *chunk)
  */
 static inline int chunk_append(struct tcb *tcb, struct chunk *chunk)
 {
-	char event_ch = EVENT_READY;
+	signed char event_ch = EVENT_READY;
 	int ret;
 
 	CRITICAL_SECTION_BEGIN(&tcb->chunk_lock);
@@ -344,7 +344,7 @@ static void *client_cb(void *data)
 	int ret = 0;
 	fd_set set;
 	int readsize;
-	char event_ch;
+	signed char event_ch;
 	int fd;
 
 	DbgPrint("Thread is created for %d (server: %d)\n", tcb->handle, tcb->server_handle);
